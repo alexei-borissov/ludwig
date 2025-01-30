@@ -34,4 +34,5 @@ int build_conservation(colloids_info_t * info, field_t * phi, psi_t * psi,
 int build_count_links_local(colloid_t * colloid, int * nlinks);
 int build_count_faces_local(colloid_t * colloid, const lb_model_t * model,
 			    double * sa, double * saf);
+void copy_links_to_array(colloid_t * pc);
 #endif

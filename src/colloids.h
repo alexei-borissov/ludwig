@@ -89,6 +89,9 @@ struct colloid {
   /* Bonded neighbours cf. colloid.h */
 
   colloid_t * bonded[NBOND_MAX];
+
+  int n_links;                /* Number of links */
+  colloid_link_t * links;     /* Array of links */
 };
 
 typedef struct colloids_info_s colloids_info_t;

@@ -284,6 +284,9 @@ int build_update_links(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 	  /* Next colloid */
 
 	  pc->s.rebuild = 0;
+
+    /* Copy links from linked list to array */
+    copy_links_to_array(pc);
 	}
 
 	/* Next cell */
@@ -1661,4 +1664,29 @@ int build_conservation_phi(colloids_info_t * cinfo, field_t * phi,
   }
 
   return 0;
+}
+
+/******************************************************************************************************/
+/* Link array functions */
+
+void copy_links_to_array(colloid_t * pc) {
+  /* Naive implementation. First count how many links there are, then copy over data */
+  pc->n_links = 0;
+  colloid_link_t *link = pc->lnk;
+  while (link) {
+    pc->n_links++;
+    link = link->next;
+  }
+  
+  pc->links = (colloid_link_t *) calloc(pc->n_links, sizeof(colloid_link_t));
+  link = pc->lnk;
+  for (int i = 0; i < pc->n_links; i++) {
+    pc->links[i].i = link->i;
+    pc->links[i].j = link->j;
+    pc->links[i].p = link->p;
+    pc->links[i].status = link->status;
+    for (int j = 0; j < 3; j++) pc->links[i].rb[j] = link->rb[j];
+
+    link = link->next;
+  }
 }
