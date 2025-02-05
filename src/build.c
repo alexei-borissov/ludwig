@@ -285,8 +285,11 @@ int build_update_links(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  pc->s.rebuild = 0;
 
+    /* Check if links array is correct */
+    //check_links_array(pc);
+
     /* Copy links from linked list to array */
-    copy_links_to_array(pc);
+    //copy_links_to_array(pc);
 	}
 
 	/* Next cell */
@@ -1678,14 +1681,34 @@ void copy_links_to_array(colloid_t * pc) {
     link = link->next;
   }
   
-  pc->links = (colloid_link_t *) calloc(pc->n_links, sizeof(colloid_link_t));
+  pc->linki = (int *) calloc(pc->n_links, sizeof(int));
+  pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
+  pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
+  pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
   link = pc->lnk;
   for (int i = 0; i < pc->n_links; i++) {
-    pc->links[i].i = link->i;
-    pc->links[i].j = link->j;
-    pc->links[i].p = link->p;
-    pc->links[i].status = link->status;
-    for (int j = 0; j < 3; j++) pc->links[i].rb[j] = link->rb[j];
+    pc->linki[i] = link->i;
+    pc->linkj[i] = link->j;
+    pc->linkp[i] = link->p;
+    pc->link_status[i] = link->status;
+    //for (int j = 0; j < 3; j++) pc->links[i].rb[j] = link->rb[j];
+
+    link = link->next;
+  }
+}
+
+void check_links_array(colloid_t * pc) {
+  colloid_link_t *link = pc->lnk;
+  
+  printf("n links %d array %d linked list %d", pc->n_links, pc->links[0].i, link->i);
+  for (int i = 0; i < pc->n_links; i++) {
+    assert(pc->linki[i] == link->i);
+    assert(pc->linkj[i] == link->j);
+    assert(pc->linkp[i] == link->p);
+    assert(pc->link_status[i] == link->status);
+    //for (int j = 0; j < 3; j++) {
+    //  assert(pc->links[i].rb[j] == link->rb[j]);
+    //}
 
     link = link->next;
   }

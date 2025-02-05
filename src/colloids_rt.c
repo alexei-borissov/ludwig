@@ -190,6 +190,27 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   pe_info(pe, "\n");
 
+
+  /* Copy links from linked list to array */
+  //int ic, jc, kc;
+  //int nhalo;
+  //colloid_t * pc;
+  //colloids_info_ncell(*pinfo, ncell);
+  //colloids_info_nhalo(*pinfo, &nhalo);
+
+  //for (ic = 1 - nhalo; ic <= ncell[X] + nhalo; ic++) {
+  //  for (jc = 1 - nhalo; jc <= ncell[Y] + nhalo; jc++) {
+  //    for (kc = 1 - nhalo; kc <= ncell[Z] + nhalo; kc++) {
+
+  //colloids_info_cell_list_head(*pinfo, ic, jc, kc, &pc);
+  //for (; pc; pc = pc->next) {
+  //  copy_links_to_array(pc);
+  //}
+
+  //    }
+  //  }
+  //}
+
   return 0;
 }
 
