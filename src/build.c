@@ -1700,7 +1700,7 @@ void copy_links_to_array(colloid_t * pc) {
 void check_links_array(colloid_t * pc) {
   colloid_link_t *link = pc->lnk;
   
-  printf("n links %d array %d linked list %d", pc->n_links, pc->links[0].i, link->i);
+  printf("n links %d array %d linked list %d", pc->n_links, pc->linki[0], link->i);
   for (int i = 0; i < pc->n_links; i++) {
     assert(pc->linki[i] == link->i);
     assert(pc->linkj[i] == link->j);
