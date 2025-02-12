@@ -41,8 +41,8 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
  *
  *****************************************************************************/
 
-__host__ int colloids_info_create(pe_t * pe, cs_t * cs, int ncell[3],
-				  colloids_info_t ** pinfo) {
+__host__ int colloids_info_create(pe_t * pe, cs_t * cs, lb_model_t * model,
+				  int ncell[3], colloids_info_t ** pinfo) {
 
   int ndevice;
   int nhalo = 1;                   /* Always exactly one halo cell each side */
@@ -59,6 +59,7 @@ __host__ int colloids_info_create(pe_t * pe, cs_t * cs, int ncell[3],
 
   obj->pe = pe;
   obj->cs = cs;
+  obj->model = model;
 
   /* Defaults */
 
@@ -137,7 +138,7 @@ __host__ int colloids_info_recreate(int newcell[3], colloids_info_t ** pinfo) {
   assert(pinfo);
 
   oldinfo = *pinfo;
-  colloids_info_create(oldinfo->pe, oldinfo->cs, newcell, &newinfo);
+  colloids_info_create(oldinfo->pe, oldinfo->cs, oldinfo->model, newcell, &newinfo);
 
   colloids_info_list_local_build(*pinfo);
   colloids_info_local_head(*pinfo, &pc);

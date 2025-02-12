@@ -252,3 +252,34 @@ static int colloids_init_check_wall(pe_t * pe, cs_t * cs,
   return 0;
 }
 
+void create_links_arrays(colloids_info_t * cinfo) {
+  colloid_t * pc;
+  colloid_link_t * link;
+
+  //return;
+  //pc = cinfo->headlocal;
+  //while (pc) {
+  //  /* Allocate enough space for links arrays */
+  //  pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->model->nvel);
+  //  pc->linki = (int *) calloc(pc->n_links, sizeof(int));
+  //  pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
+  //  pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
+  //  pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
+
+  //  /* While we're keeping both the linked list and array implementations copy over the data from the colloid */
+  //  link = pc->lnk;
+  //  int i = 0;
+  //  while (link != NULL) {
+  //    pc->linki[i] = link->i;
+  //    pc->linkj[i] = link->j;
+  //    pc->linkp[i] = link->p;
+  //    pc->link_status[i] = link->status;
+  //    //for (int j = 0; j < 3; j++) pc->links[i].rb[j] = link->rb[j];
+
+  //    link = link->next;
+  //    i++;
+  //  }
+
+  //  pc = pc->next; // should this be next or nextlocal?
+  //}
+}

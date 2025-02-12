@@ -106,7 +106,7 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   /* Colloid info object always created with ncell = 2;
    * later we check if this is ok and adjust if necesaary/possible. */
 
-  colloids_info_create(pe, cs, ncell, pinfo);
+  colloids_info_create(pe, cs, model, ncell, pinfo);
 
   rt_string_parameter(rt, "colloid_init", keyvalue, BUFSIZ);
 
@@ -311,6 +311,8 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     pe_fatal(pe, "Cannot specify more than 3 colloids with a file\n");
   }
 
+  create_links_arrays(cinfo);
+
   return 0;
 }
 
@@ -343,6 +345,8 @@ int colloids_rt_init_from_file(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
   }
 
   colloid_io_read(cio, filename);
+
+  create_links_arrays(cinfo);
 
   return 0;
 }
@@ -380,6 +384,8 @@ int colloids_rt_init_random(pe_t * pe, cs_t * cs, rt_t * rt, wall_t * wall,
   pe_info(pe, "Colloid charges q0 = %le    q1 = %le\n", state0->q0, state0->q1);
 
   free(state0);
+
+  create_links_arrays(cinfo);
 
   return 0;
 }

@@ -63,12 +63,6 @@ static const int have_graph_api_ = 0;
 static const int have_graph_api_ = 0;
 #endif
 
-#if defined (MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
-static const int have_gpu_aware_mpi_ = 1;
-#else
-static const int have_gpu_aware_mpi_ = 0;
-#endif
-
 /*****************************************************************************
  *
  *  lb_data_create
@@ -1482,7 +1476,7 @@ int lb_halo_post(lb_t * lb, lb_halo_t * h) {
       int k = 1 + h->map.cv[h->map.nvel-ireq][Z];
       int mcount = h->count[ireq]*lb_halo_size(h->rlim[ireq]);
       double * buf = h->recv[ireq];
-      if (have_gpu_aware_mpi_) buf = h->recv_d[ireq];
+      if (have_gpu_aware_mpi_()) buf = h->recv_d[ireq];
 
       if (h->nbrrank[i][j][k] == h->nbrrank[1][1][1]) continue;
       
@@ -1513,7 +1507,7 @@ int lb_halo_post(lb_t * lb, lb_halo_t * h) {
           tdpLaunchKernel(lb_halo_enqueue_send_kernel, nblk, ntpb, 0, 0, lb->target, h->target, ireq);
           tdpAssert( tdpDeviceSynchronize());
  
-          if (!have_gpu_aware_mpi_) {
+          if (!have_gpu_aware_mpi_()) {
             tdpAssert( tdpMemcpy(h->send[ireq], h->send_d[ireq], sizeof(double)*scount, tdpMemcpyDeviceToHost));
           }
         }
@@ -1542,7 +1536,7 @@ int lb_halo_post(lb_t * lb, lb_halo_t * h) {
       int k = 1 + h->map.cv[ireq][Z];
       int mcount = h->count[ireq]*lb_halo_size(h->slim[ireq]);
       double * buf = h->send[ireq];
-      if (have_gpu_aware_mpi_) buf = h->send_d[ireq];
+      if (have_gpu_aware_mpi_()) buf = h->send_d[ireq];
 
       /* Short circuit messages to self. */
       if (h->nbrrank[i][j][k] == h->nbrrank[1][1][1]) continue;
@@ -1586,7 +1580,7 @@ int lb_halo_wait(lb_t * lb, lb_halo_t * h) {
       for (int ireq = 0; ireq < h->map.nvel; ireq++) {
         if (h->count[ireq] > 0) {
           int rcount = h->count[ireq]*lb_halo_size(h->slim[ireq]);
-          if (!have_gpu_aware_mpi_) {
+          if (!have_gpu_aware_mpi_()) {
             tdpAssert( tdpMemcpy(h->recv[ireq], h->recv_d[ireq], sizeof(double)*rcount, tdpMemcpyDeviceToHost));
           }
           dim3 nblk, ntpb;
@@ -1961,7 +1955,7 @@ int lb_graph_halo_send_create(const lb_t * lb, lb_halo_t * h, int * send_count) 
     tdpAssert( tdpGraphAddKernelNode(&kernelNode, h->gsend.graph, NULL, 0,
 				     &kernelNodeParams) );
 
-    if (have_gpu_aware_mpi_) {
+    if (have_gpu_aware_mpi_()) {
       /* Don't need explicit device -> host copy */
     }
     else {
@@ -2018,7 +2012,7 @@ int lb_graph_halo_recv_create(const lb_t * lb, lb_halo_t * h, int * recv_count) 
     if (h->count[ireq] == 0) continue;
     tdpGraphNode_t memcpyNode = {0};
 
-    if (have_gpu_aware_mpi_) {
+    if (have_gpu_aware_mpi_()) {
       /* Don't need explicit copies */
     }
     else {
@@ -2066,7 +2060,7 @@ int lb_graph_halo_recv_create(const lb_t * lb, lb_halo_t * h, int * recv_count) 
     kernelNodeParams.kernelParams   = (void **) kernelArgs;
     kernelNodeParams.extra          = NULL;
 
-    if (have_gpu_aware_mpi_) {
+    if (have_gpu_aware_mpi_()) {
       tdpAssert( tdpGraphAddKernelNode(&node, h->grecv.graph, NULL,
 				       0, &kernelNodeParams) );
     }
