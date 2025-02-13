@@ -41,7 +41,7 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
  *
  *****************************************************************************/
 
-__host__ int colloids_info_create(pe_t * pe, cs_t * cs, lb_model_t * model,
+__host__ int colloids_info_create(pe_t * pe, cs_t * cs, const lb_model_t * model,
 				  int ncell[3], colloids_info_t ** pinfo) {
 
   int ndevice;
@@ -59,7 +59,7 @@ __host__ int colloids_info_create(pe_t * pe, cs_t * cs, lb_model_t * model,
 
   obj->pe = pe;
   obj->cs = cs;
-  obj->model = model;
+  //obj->model = model;
 
   /* Defaults */
 

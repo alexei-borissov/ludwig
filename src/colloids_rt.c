@@ -190,27 +190,6 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   pe_info(pe, "\n");
 
-
-  /* Copy links from linked list to array */
-  //int ic, jc, kc;
-  //int nhalo;
-  //colloid_t * pc;
-  //colloids_info_ncell(*pinfo, ncell);
-  //colloids_info_nhalo(*pinfo, &nhalo);
-
-  //for (ic = 1 - nhalo; ic <= ncell[X] + nhalo; ic++) {
-  //  for (jc = 1 - nhalo; jc <= ncell[Y] + nhalo; jc++) {
-  //    for (kc = 1 - nhalo; kc <= ncell[Z] + nhalo; kc++) {
-
-  //colloids_info_cell_list_head(*pinfo, ic, jc, kc, &pc);
-  //for (; pc; pc = pc->next) {
-  //  copy_links_to_array(pc);
-  //}
-
-  //    }
-  //  }
-  //}
-
   return 0;
 }
 
@@ -311,7 +290,7 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     pe_fatal(pe, "Cannot specify more than 3 colloids with a file\n");
   }
 
-  create_links_arrays(cinfo);
+  //create_links_arrays(cinfo);
 
   return 0;
 }
@@ -346,7 +325,7 @@ int colloids_rt_init_from_file(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
 
   colloid_io_read(cio, filename);
 
-  create_links_arrays(cinfo);
+  //create_links_arrays(cinfo);
 
   return 0;
 }
@@ -385,7 +364,7 @@ int colloids_rt_init_random(pe_t * pe, cs_t * cs, rt_t * rt, wall_t * wall,
 
   free(state0);
 
-  create_links_arrays(cinfo);
+  //create_links_arrays(cinfo);
 
   return 0;
 }

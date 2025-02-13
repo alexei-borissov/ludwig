@@ -253,10 +253,9 @@ static int colloids_init_check_wall(pe_t * pe, cs_t * cs,
 }
 
 void create_links_arrays(colloids_info_t * cinfo) {
-  colloid_t * pc;
-  colloid_link_t * link;
+  //colloid_t * pc;
+  //colloid_link_t * link;
 
-  //return;
   //pc = cinfo->headlocal;
   //while (pc) {
   //  /* Allocate enough space for links arrays */
