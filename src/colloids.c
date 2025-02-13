@@ -41,7 +41,7 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
  *
  *****************************************************************************/
 
-__host__ int colloids_info_create(pe_t * pe, cs_t * cs, const lb_model_t * model,
+__host__ int colloids_info_create(pe_t * pe, cs_t * cs, const int nvel,
 				  int ncell[3], colloids_info_t ** pinfo) {
 
   int ndevice;
@@ -59,7 +59,7 @@ __host__ int colloids_info_create(pe_t * pe, cs_t * cs, const lb_model_t * model
 
   obj->pe = pe;
   obj->cs = cs;
-  obj->model = model;
+  obj->nvel = nvel;
 
   /* Defaults */
 
@@ -138,7 +138,7 @@ __host__ int colloids_info_recreate(int newcell[3], colloids_info_t ** pinfo) {
   assert(pinfo);
 
   oldinfo = *pinfo;
-  colloids_info_create(oldinfo->pe, oldinfo->cs, oldinfo->model, newcell, &newinfo);
+  colloids_info_create(oldinfo->pe, oldinfo->cs, oldinfo->nvel, newcell, &newinfo);
   //colloids_info_create(oldinfo->pe, oldinfo->cs, NULL, newcell, &newinfo);
 
   colloids_info_list_local_build(*pinfo);

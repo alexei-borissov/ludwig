@@ -109,6 +109,7 @@ struct colloids_info_s {
   int str[3];                 /* Strides for cell list */
   int nsites;                 /* Total number of map sites */
   int ncells;                 /* Total number of cells */
+  int nvel;                   /* The number of velocities */
 
   int nsubgrid;               /* Total number of subgrid particles */
   int rebuild_freq;           /* Rebuild shape every so many steps */
@@ -129,11 +130,10 @@ struct colloids_info_s {
 
   pe_t * pe;                  /* Parallel environment */
   cs_t * cs;                  /* Coordinate system */
-  lb_model_t * model;         /* The model */
   colloids_info_t * target;   /* Copy of this structure on target */
 };
 
-__host__ int colloids_info_create(pe_t * pe, cs_t * cs, const lb_model_t * model, int ncell[3],
+__host__ int colloids_info_create(pe_t * pe, cs_t * cs, const int nvel, int ncell[3],
 				  colloids_info_t ** pinfo);
 __host__ void colloids_info_free(colloids_info_t * info);
 __host__ int colloids_info_recreate(int newcell[3], colloids_info_t ** pinfo);

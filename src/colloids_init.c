@@ -259,7 +259,7 @@ void create_links_arrays(colloids_info_t * cinfo) {
   //pc = cinfo->headlocal;
   //while (pc) {
   //  /* Allocate enough space for links arrays */
-  //  pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->model->nvel);
+  //  pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
   //  pc->linki = (int *) calloc(pc->n_links, sizeof(int));
   //  pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
   //  pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
