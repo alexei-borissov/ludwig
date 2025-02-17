@@ -453,7 +453,6 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
 
   int ia;
 
-  colloid_link_t * p_link;
   int         isite[3];
   double      rsite[3];
   double      rsep[3];
@@ -469,11 +468,9 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
 
   cs_nlocal_offset(cs, offset);
 
-  p_link = p_colloid->lnk;
+  for (int link_index = 0; link_index < p_colloid->n_links; link_index++) {
 
-  while (p_link) {
-
-    if (p_link->status == LINK_UNUSED) {
+    if (p_colloid->link_status[link_index] == LINK_UNUSED) {
       /* Link is not active */
     }
     else {
@@ -482,32 +479,29 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
        * and the fluid site involved with this link. The position
        * of the outside site is rsite in local coordinates. */
 
-      cs_index_to_ijk(cs, p_link->i, isite);
+      cs_index_to_ijk(cs, p_colloid->linki[link_index], isite);
       for (ia = 0; ia < 3; ia++) {
 	rsite[ia] = 1.0*isite[ia];
 	r0[ia] = p_colloid->s.r[ia] - 1.0*offset[ia];
       }
       cs_minimum_distance(cs, r0, rsite, rsep);
 
-      p_link->rb[X] = rsep[X] + lambda*model->cv[p_link->p][X];
-      p_link->rb[Y] = rsep[Y] + lambda*model->cv[p_link->p][Y];
-      p_link->rb[Z] = rsep[Z] + lambda*model->cv[p_link->p][Z];
+      p_colloid->linkrb[link_index][X] = rsep[X] + lambda*model->cv[p_colloid->linkp[link_index]][X];
+      p_colloid->linkrb[link_index][Y] = rsep[Y] + lambda*model->cv[p_colloid->linkp[link_index]][Y];
+      p_colloid->linkrb[link_index][Z] = rsep[Z] + lambda*model->cv[p_colloid->linkp[link_index]][Z];
 
-      map_status(map, p_link->i, &status);
+      map_status(map, p_colloid->linki[link_index], &status);
 
       if (status == MAP_FLUID) {
-	int p = p_link->p;
-	p_link->status = LINK_FLUID;
-	build_link_mean(p_colloid, model->wv[p], model->cv[p], p_link->rb);
+	int p = p_colloid->linkp[link_index];
+	p_colloid->link_status[link_index] = LINK_FLUID;
+	build_link_mean(p_colloid, model->wv[p], model->cv[p], p_colloid->linkrb[link_index]);
       }
       else {
-	if (status == MAP_COLLOID) p_link->status = LINK_COLLOID;
-	if (status == MAP_BOUNDARY) p_link->status = LINK_BOUNDARY;
+	if (status == MAP_COLLOID) p_colloid->link_status[link_index] = LINK_COLLOID;
+	if (status == MAP_BOUNDARY) p_colloid->link_status[link_index] = LINK_BOUNDARY;
       }
     }
-
-    /* Next link */
-    p_link = p_link->next;
   }
 
   return 0;

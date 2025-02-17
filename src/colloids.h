@@ -96,7 +96,7 @@ struct colloid {
   int * linkj;                /* Array of inside (solid) site indices */
   int * linkp;                /* Array of LB basis vectors for links */
   int * link_status;          /* Array of link statuses */
-  double ** linkrb            /* Array of vectors connecting centre of colloid and centre of the boundary link*/
+  double ** linkrb;           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
 };
 
 typedef struct colloids_info_s colloids_info_t;
