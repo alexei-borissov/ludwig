@@ -266,6 +266,16 @@ void create_links_arrays(colloids_info_t * cinfo) {
     pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
     pc->linkrb = (double **) malloc(pc->n_links * sizeof(double *));
     for (int i = 0; i < pc->n_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
+    assert(pc->linki);
+    assert(pc->linkj);
+    assert(pc->linkp);
+    assert(pc->link_status);
+    assert(pc->linkrb);
+    if (pc->linki == NULL) pe_fatal(cinfo->pe,"calloc(pc->linki) failed\n");
+    if (pc->linkj == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkj) failed\n");
+    if (pc->linkp == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkp) failed\n");
+    if (pc->link_status == NULL) pe_fatal(cinfo->pe,"calloc(pc->link_status) failed\n");
+    if (pc->linkrb == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkrb) failed\n");
 
     pc = pc->next; // should this be next or nextlocal?
   }
