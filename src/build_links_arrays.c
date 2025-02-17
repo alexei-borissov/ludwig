@@ -30,7 +30,7 @@
 #include "util_ellipsoid.h"
 #include "util_vector.h"
 #include "wall.h"
-#include "build.h"
+#include "build_links_arrays.h"
 #include "blue_phase.h"
 
 
@@ -1412,7 +1412,6 @@ int build_count_faces_local_arrays(colloid_t * colloid, const lb_model_t * model
 			    double * sa, double * saf) {
 
   int p;
-  colloid_link_t * pl = NULL;
 
   assert(colloid);
   assert(sa);
@@ -1422,15 +1421,15 @@ int build_count_faces_local_arrays(colloid_t * colloid, const lb_model_t * model
   *sa = 0.0;
   *saf = 0.0;
 
-  for (pl = colloid->lnk; pl != NULL; pl = pl->next) {
-    if (pl->status == LINK_UNUSED) continue;
-    p = pl->p;
+  for (int link_index = 0; link_index < colloid->n_links; link_index++) {
+    if (colloid->link_status[link_index] == LINK_UNUSED) continue;
+    p = colloid->linkp[link_index];
     p = model->cv[p][X]*model->cv[p][X]
       + model->cv[p][Y]*model->cv[p][Y]
       + model->cv[p][Z]*model->cv[p][Z];
     if (p == 1) {
       *sa += 1.0;
-      if (pl->status == LINK_FLUID) *saf += 1.0;
+      if (colloid->link_status[link_index] == LINK_FLUID) *saf += 1.0;
     }
   }
 
