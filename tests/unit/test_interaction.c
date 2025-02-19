@@ -64,7 +64,7 @@ int test_colloids_update_forces_external(pe_t * pe) {
 
   cs_create(pe, &cs);
   cs_init(cs);
-  colloids_info_create(pe, cs, ncells, &cinfo);
+  colloids_info_create(pe, cs, 27, ncells, &cinfo); // dummy nvel=27
 
   {
     /* Add a sample colloid to list */
@@ -134,7 +134,7 @@ int test_colloids_update_forces_fluid_body_force(pe_t * pe) {
 
   cs_create(pe, &cs);
   cs_init(cs);
-  colloids_info_create(pe, cs, ncells, &cinfo);
+  colloids_info_create(pe, cs, 27, ncells, &cinfo); // Dummy nvel=27
 
   {
     /* Add a sample colloid to list */
@@ -213,7 +213,7 @@ int test_colloids_update_forces_buoyancy(pe_t * pe) {
   cs_create(pe, &cs);
   cs_init(cs);
   map_create(pe, cs, &opts, &map);
-  colloids_info_create(pe, cs, ncells, &cinfo);
+  colloids_info_create(pe, cs, 27, ncells, &cinfo); // nvel=27
 
   {
     /* Add a sample colloid to list */

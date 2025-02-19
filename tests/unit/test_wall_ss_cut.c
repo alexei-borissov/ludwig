@@ -20,7 +20,7 @@
 
 int test_wall_ss_cut_create(pe_t * pe, cs_t * cs, wall_t * wall);
 int test_wall_ss_cut_single(pe_t * pe, cs_t * cs, wall_t * wall);
-int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall);
+int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb);
 
 /*****************************************************************************
  *
@@ -53,7 +53,7 @@ int test_wall_ss_cut_suite(void) {
 
     test_wall_ss_cut_create(pe, cs, wall);
     test_wall_ss_cut_single(pe, cs, wall);
-    test_wall_ss_cut_compute(pe, cs, wall);
+    test_wall_ss_cut_compute(pe, cs, wall, lb);
 
     wall_free(wall);
     map_free(&map);
@@ -129,7 +129,7 @@ int test_wall_ss_cut_single(pe_t * pe, cs_t * cs, wall_t * wall) {
  *
  *****************************************************************************/
 
-int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall) {
+int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb) {
 
   int ncell[3] = {2, 2, 2};
   colloids_info_t * cinfo = NULL;
@@ -144,7 +144,7 @@ int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall) {
   assert(cs);
   assert(wall);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, lb->nvel, ncell, &cinfo); 
   wall_ss_cut_create(pe, cs, wall, &opts, &wall_ss_cut);
 
   {

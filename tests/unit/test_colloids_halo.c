@@ -90,7 +90,7 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   cs_ntotal(cs, ntotal);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   colloids_halo_create(cinfo, &halo);
@@ -241,7 +241,7 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
   cs_ntotal(cs, ntotal);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   colloids_halo_create(cinfo, &halo);
@@ -378,7 +378,7 @@ int test_colloids_halo_repeat(pe_t * pe, cs_t * cs) {
 
   cs_lmin(cs, lmin);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   cs_nlocal_offset(cs, noffset);

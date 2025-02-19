@@ -205,7 +205,7 @@ int test_bonds_dimer_instance(pe_t * pe, cs_t * cs, double a0, double r1[3],
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   cs_cart_comm(cs, &comm);
@@ -305,7 +305,7 @@ int test_bonds_trimer_instance(pe_t * pe, cs_t * cs, double a0, double r0[3],
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   cs_cart_comm(cs, &comm);

@@ -95,7 +95,7 @@ int test_colloids_info_with_ncell(pe_t * pe, cs_t * cs, int ncellref[3]) {
   cs_ltot(cs, ltot);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, ncellref, &cinfo);
+  colloids_info_create(pe, cs, 27, ncellref, &cinfo); // nvel=27
   assert(cinfo);
 
   colloids_info_ncell(cinfo, ncell);

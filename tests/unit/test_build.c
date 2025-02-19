@@ -164,7 +164,7 @@ static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
 
   map_create(pe, cs, &opts, &map);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   colloids_info_map_init(cinfo);
 
   {
@@ -220,7 +220,7 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
 
   map_create(pe, cs, &opts, &map);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   colloids_info_map_init(cinfo);
 
   {
@@ -278,7 +278,7 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
   lb_model_t lb = {0};
   colloids_info_t * cinfo = NULL;
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, nvel, ncell, &cinfo);
   colloids_info_map_init(cinfo);
 
   map_create(pe, cs, &opts, &map);

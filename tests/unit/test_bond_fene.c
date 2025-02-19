@@ -116,7 +116,7 @@ int test_bond_fene2(pe_t * pe, cs_t * cs) {
   cs_ltot(cs, ltot);
   cs_cart_comm(cs, &comm);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   interact_create(pe, cs, &interact);
 
   assert(cinfo);

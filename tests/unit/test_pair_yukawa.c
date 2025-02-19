@@ -104,7 +104,7 @@ int test_pair_yukawa2(pe_t * pe, cs_t * cs) {
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // Dummy value nvel=27
   interact_create(pe, cs, &interact);
   pair_yukawa_create(pe, cs, &pair);
 

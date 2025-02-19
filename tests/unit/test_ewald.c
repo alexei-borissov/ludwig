@@ -76,7 +76,7 @@ int test_ewald_suite(void) {
   test_assert(fabs(ltot[Y] - 64.0) < TEST_DOUBLE_TOLERANCE);
   test_assert(fabs(ltot[Z] - 64.0) < TEST_DOUBLE_TOLERANCE);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   test_assert(cinfo != NULL);
 
   ewald_create(pe, cs, mu, rc, cinfo, &ewald);

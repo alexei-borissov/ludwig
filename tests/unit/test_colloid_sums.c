@@ -148,7 +148,7 @@ static int test_colloid_sums_edge(pe_t * pe, cs_t * cs, int ncell[3],
   test_colloid_sums_reference_set(&cref1, 1);
   test_colloid_sums_reference_set(&cref2, 2);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
   colloid_sums_create(cinfo, &halosum);
   assert(halosum);
@@ -377,7 +377,7 @@ static int test_colloid_sums_move(pe_t * pe) {
   cs_ntotal_set(cs, ntotal);
   cs_init(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   dx = 1.0*ntotal[X]/nstep;
@@ -447,7 +447,7 @@ int test_colloid_sums_conservation(pe_t * pe) {
   cs_ntotal_set(cs, ntotal);
   cs_init(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   assert(cinfo);
 
   index = 1;

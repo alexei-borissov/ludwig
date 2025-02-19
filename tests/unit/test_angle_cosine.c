@@ -79,7 +79,7 @@ int test_angle_cosine1(pe_t * pe, cs_t * cs) {
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   interact_create(pe, cs, &interact);
   angle_cosine_create(pe, cs, &angle);
   angle_cosine_param_set(angle, ANGLE_KAPPA);
@@ -136,7 +136,7 @@ int test_angle_cosine2(pe_t * pe, cs_t * cs) {
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, ncell, &cinfo);
+  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
   interact_create(pe, cs, &interact);
   angle_cosine_create(pe, cs, &angle);
   angle_cosine_param_set(angle, ANGLE_KAPPA);
