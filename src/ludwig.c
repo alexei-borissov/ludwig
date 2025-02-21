@@ -85,6 +85,7 @@
 #include "colloid_sums.h"
 #include "colloids_halo.h"
 #include "build.h"
+#include "build_links_arrays.h"
 #include "subgrid.h"
 #include "colloids.h"
 #include "advection_rt.h"
@@ -2183,6 +2184,8 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
   build_update_map(ludwig->cs, ludwig->collinfo, ludwig->map);
   build_remove_replace(ludwig->fe, ludwig->collinfo, ludwig->lb, ludwig->phi,
 		       ludwig->p, ludwig->q, ludwig->psi, ludwig->map);
+  build_update_links_arrays(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
+	       &ludwig->lb->model);
   build_update_links(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
 		     &ludwig->lb->model);
 

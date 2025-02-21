@@ -190,6 +190,13 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   pe_info(pe, "\n");
 
+  colloid_t * pc;
+  colloids_info_local_head(*pinfo, &pc);
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (pc) printf("rank %d has colloid \n", rank);
+  create_links_arrays(*pinfo);
+
   return 0;
 }
 
@@ -290,8 +297,6 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     pe_fatal(pe, "Cannot specify more than 3 colloids with a file\n");
   }
 
-  create_links_arrays(cinfo);
-
   return 0;
 }
 
@@ -324,8 +329,6 @@ int colloids_rt_init_from_file(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
   }
 
   colloid_io_read(cio, filename);
-
-  create_links_arrays(cinfo);
 
   return 0;
 }
@@ -363,8 +366,6 @@ int colloids_rt_init_random(pe_t * pe, cs_t * cs, rt_t * rt, wall_t * wall,
   pe_info(pe, "Colloid charges q0 = %le    q1 = %le\n", state0->q0, state0->q1);
 
   free(state0);
-
-  create_links_arrays(cinfo);
 
   return 0;
 }

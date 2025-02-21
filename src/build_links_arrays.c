@@ -34,10 +34,10 @@
 #include "blue_phase.h"
 
 
-int build_replace_fluid_local(colloids_info_t * info, colloid_t * pc,
+int build_replace_fluid_local_links_arrays(colloids_info_t * info, colloid_t * pc,
 			      int index, lb_t * lb);
 
-int build_replace_q_local(fe_t * fe, colloids_info_t * info, colloid_t * pc, int index,
+int build_replace_q_local_links_arrays(fe_t * fe, colloids_info_t * info, colloid_t * pc, int index,
 			  field_t * q);
 
 static int build_remove_fluid(lb_t * lb, int index, colloid_t * pc);
@@ -50,7 +50,7 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb, colloids_info_t *
 					 colloid_t * pc, map_t * map);
 static int build_reset_links(cs_t * cs, colloid_t * pc, map_t * map,
 			     const lb_model_t * model);
-static int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
+static int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 				   colloid_t * pc, map_t * map,
 				   const lb_model_t * model);
 static void build_link_mean(colloid_t * pc, double wv, const int8_t cv[3],
@@ -59,9 +59,9 @@ static int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
 				    colloid_t * pc, map_t * map,
 				    const lb_model_t * model);
 
-int build_conservation_phi(colloids_info_t * cinfo, field_t * phi,
+int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
 			   const lb_model_t * model);
-int build_conservation_psi(colloids_info_t * cinfo, psi_t * psi,
+int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
 			   const lb_model_t * model);
 
 /*****************************************************************************
@@ -271,7 +271,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  if (pc->s.rebuild) {
 	    /* The shape has changed, so need to reconstruct */
-	    build_reconstruct_links(cs, cinfo, pc, map, model);
+	    build_reconstruct_links_array(cs, cinfo, pc, map, model);
 	    if (wall) build_colloid_wall_links(cs, cinfo, pc, map, model);
 	  }
 	  else {
@@ -283,7 +283,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  /* Next colloid */
 
-	  pc->s.rebuild = 0;
+	  //pc->s.rebuild = 0;
 	}
 
 	/* Next cell */
@@ -310,7 +310,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
  *
   ****************************************************************************/
 
-int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
+int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 			    colloid_t * p_colloid,
 			    map_t * map, const lb_model_t * model) {
 
@@ -395,10 +395,6 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
 	  colloids_info_map(cinfo, index0, &pc);
 	  if (pc != p_colloid) continue;
 
-	  /* Index 0 is inside, so now add a link*/
-
-	  /* Use existing link (lambda always 0.5 at moment) */
-
 	  p_colloid->linkrb[link_index][X] = rsep[X] + lambda*model->cv[p][X];
 	  p_colloid->linkrb[link_index][Y] = rsep[Y] + lambda*model->cv[p][Y];
 	  p_colloid->linkrb[link_index][Z] = rsep[Z] + lambda*model->cv[p][Z];
@@ -415,10 +411,10 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
 	  else {
 	    p_colloid->link_status[link_index] = LINK_COLLOID;
 	  }
+    link_index++;
 
 	  /* Next lattice vector */
 	}
-  link_index++;
 
   /* Check that we don't exceed the total number of links */
   assert(link_index <= p_colloid->n_links);
@@ -586,7 +582,7 @@ int build_remove_replace_links_array(fe_t * fe, colloids_info_t * cinfo, lb_t * 
 
 /*****************************************************************************
  *
- *  build_bbl_rebuild_flag
+ *  build_bbl_rebuild_flag_links_arrays
  *
  *  Looks for changes in the status map and sets the rebuild flag (only).
  *
@@ -594,7 +590,7 @@ int build_remove_replace_links_array(fe_t * fe, colloids_info_t * cinfo, lb_t * 
  *
  *****************************************************************************/
 
-int build_bbl_rebuild_flag(cs_t * cs, colloids_info_t * cinfo) {
+int build_bbl_rebuild_flag_links_arrays(cs_t * cs, colloids_info_t * cinfo) {
 
   int ic, jc, kc, index;
   int nlocal[3];
@@ -633,7 +629,7 @@ int build_bbl_rebuild_flag(cs_t * cs, colloids_info_t * cinfo) {
  *
  *****************************************************************************/
 
-int build_remove_replace_policy_local(cs_t * cs, colloids_info_t * cinfo,
+int build_remove_replace_policy_local_links_arrays(cs_t * cs, colloids_info_t * cinfo,
 				      lb_t * lb) {
   int ic, jc, kc, index;
   int nlocal[3];
@@ -660,7 +656,7 @@ int build_remove_replace_policy_local(cs_t * cs, colloids_info_t * cinfo,
 	}
 
 	if (pcold != NULL && pcnew == NULL) {
-	  build_replace_fluid_local(cinfo, pcold, index, lb);
+	  build_replace_fluid_local_links_array(cinfo, pcold, index, lb);
 	}
 	/* Next site */
       }
@@ -853,7 +849,7 @@ static int build_replace_fluid(lb_t * lb, colloids_info_t * cinfo, int index,
 
   if (nweight == 0) {
     /* Cannot interpolate: fall back to local replacement */
-    build_replace_fluid_local(cinfo, p_colloid, index, lb);
+    build_replace_fluid_local_links_array(cinfo, p_colloid, index, lb);
   }
   else {
 
@@ -899,7 +895,7 @@ static int build_replace_fluid(lb_t * lb, colloids_info_t * cinfo, int index,
 
 /*****************************************************************************
  *
- *  build_replace_fluid_local
+ *  build_replace_fluid_local_links_array
  *
  *  For COLLOID_REPLACE_POLICY_LOCAL, replace distributions
  *  by using a reprojection based on the local solid body
@@ -910,7 +906,7 @@ static int build_replace_fluid(lb_t * lb, colloids_info_t * cinfo, int index,
  *
  *****************************************************************************/
 
-int build_replace_fluid_local(colloids_info_t * cinfo, colloid_t * pc,
+int build_replace_fluid_local_links_array(colloids_info_t * cinfo, colloid_t * pc,
 			      int index, lb_t * lb) {
 
   int ia, ib, p;
@@ -1089,7 +1085,7 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
     }
     if (nweight == 0) {
       /* No information. For phi, use existing (solid) value. */
-      if (fe->id == FE_LC) build_replace_q_local(fe, cinfo, pc, index, f);
+      if (fe->id == FE_LC) build_replace_q_local_links_array(fe, cinfo, pc, index, f);
       if (fe->id == FE_SYMMETRIC) field_scalar(f, index, phi);
     }
     else {
@@ -1111,13 +1107,13 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
 
 /*****************************************************************************
  *
- *  build_replace_q_local
+ *  build_replace_q_local_links_array
  *
  *  ASSUME NORMAL ANCHORING AMPLITUDE = 1/3
  *
  *****************************************************************************/
 
-int build_replace_q_local(fe_t * fe, colloids_info_t * info, colloid_t * pc,
+int build_replace_q_local_links_array(fe_t * fe, colloids_info_t * info, colloid_t * pc,
 			  int index, field_t * q) {
 
   int ia, ib;
@@ -1453,15 +1449,15 @@ int build_conservation_links_arrays(colloids_info_t * cinfo, field_t * phi, psi_
 
   assert(cinfo);
 
-  if (phi) build_conservation_phi(cinfo, phi, model);
-  if (psi) build_conservation_psi(cinfo, psi, model);
+  if (phi) build_conservation_phi_links_arrays(cinfo, phi, model);
+  if (psi) build_conservation_psi_links_arrays(cinfo, psi, model);
 
   return 0;
 }
 
 /*****************************************************************************
  *
- *  build_conservation_psi
+ *  build_conservation_psi_links_arrays
  *
  *  Ensure fluid charge is conserved following remove / replace.
  *
@@ -1471,7 +1467,7 @@ int build_conservation_links_arrays(colloids_info_t * cinfo, field_t * phi, psi_
  *
  *****************************************************************************/
 
-int build_conservation_psi(colloids_info_t * cinfo, psi_t * psi,
+int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
 			   const lb_model_t * model) {
 
   int p;
@@ -1554,7 +1550,7 @@ int build_conservation_psi(colloids_info_t * cinfo, psi_t * psi,
 
 /*****************************************************************************
  *
- *  build_conservation_phi
+ *  build_conservation_phi_links_arrays
  *
  *  To be run immediately following remove/replace so that there is no
  *  change in mean composition.
@@ -1565,7 +1561,7 @@ int build_conservation_psi(colloids_info_t * cinfo, psi_t * psi,
  *
  *****************************************************************************/
 
-int build_conservation_phi(colloids_info_t * cinfo, field_t * phi,
+int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
 			   const lb_model_t * model) {
 
   int p;
