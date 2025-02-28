@@ -826,14 +826,14 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     p_link = pc->lnk;
 
-    for ( ; p_link; p_link = p_link->next) {
+    for (int link_index = 0; link_index < pc->active_links; link_index++) {
 
-      i = p_link->i;              /* index site i (outside) */
-      j = p_link->j;              /* index site j (inside) */
-      ij = p_link->p;             /* link velocity index i->j */
+      i = pc->linki[link_index];              /* index site i (outside) */
+      j = pc->linkj[link_index];              /* index site j (inside) */
+      ij = pc->linkp[link_index];             /* link velocity index i->j */
       ji = lb->model.nvel - ij;   /* link velocity index j->i */
 
-      if (p_link->status == LINK_FLUID) {
+      if (pc->link_status[link_index] == LINK_FLUID) {
 
 	lb_f(lb, i, ij, 0, &fdist);
 	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
@@ -841,7 +841,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	/* Compute the self-consistent boundary velocity,
 	 * and add the correction term for changes in shape. */
 
-	cross_product(pc->s.w, p_link->rb, wxrb);
+	cross_product(pc->s.w, pc->linkrb[link_index], wxrb);
 
 	vdotc = 0.0;
 	for (ia = 0; ia < 3; ia++) {
@@ -880,12 +880,12 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
 	/* The stress is r_b f_b */
 	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += p_link->rb[X]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += p_link->rb[Y]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += p_link->rb[Z]*(dm - df)*lb->model.cv[ij][ia];
+	  bbl->stress[ia][X] += pc->linkrb[link_index][X]*(dm - df)*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Y] += pc->linkrb[link_index][Y]*(dm - df)*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Z] += pc->linkrb[link_index][Z]*(dm - df)*lb->model.cv[ij][ia];
 	}
       }
-      else if (p_link->status == LINK_COLLOID) {
+      else if (pc->link_status[link_index] == LINK_COLLOID) {
 
 	/* The stress should include the solid->solid term */
 
@@ -895,9 +895,9 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	dm += fdist;
 
 	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += p_link->rb[X]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += p_link->rb[Y]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += p_link->rb[Z]*dm*lb->model.cv[ij][ia];
+	  bbl->stress[ia][X] += pc->linkrb[link_index][X]*dm*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Y] += pc->linkrb[link_index][Y]*dm*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Z] += pc->linkrb[link_index][Z]*dm*lb->model.cv[ij][ia];
 	}
       }
       /* Next link */
