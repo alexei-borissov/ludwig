@@ -91,7 +91,8 @@ struct colloid {
 
   colloid_t * bonded[NBOND_MAX];
 
-  int n_links;                /* Number of links */
+  int max_links;              /* Max number of links for given colloid */
+  int active_links;           /* Actual number of links */
   int * linki;                /* Array of outside (fluid) site indices */
   int * linkj;                /* Array of inside (solid) site indices */
   int * linkp;                /* Array of LB basis vectors for links */

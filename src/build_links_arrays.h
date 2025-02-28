@@ -35,4 +35,5 @@ int build_count_links_local_arrays(colloid_t * colloid, int * nlinks);
 int build_count_faces_local_arrays(colloid_t * colloid, const lb_model_t * model,
 			    double * sa, double * saf);
 void copy_links_to_array(colloids_info_t * cinfo);
+void check_links_arrays(colloids_info_t * cinfo);
 #endif

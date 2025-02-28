@@ -32,6 +32,7 @@
 #include "bbl.h"
 #include "colloid.h"
 #include "colloids.h"
+#include "build_links_arrays.h"
 
 
 /* Ellipsoid update mechanism flag */
@@ -226,6 +227,9 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   assert(bbl);
   assert(lb);
   assert(cinfo);
+
+  /* safety check to make sure links arrays are same as linked list */
+  check_links_arrays(cinfo);
 
   cs_nlocal(bbl->cs, nlocal);
 

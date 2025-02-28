@@ -342,7 +342,7 @@ int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
   cs_nlocal_offset(cs, offset);
 
   /* Failsafe approach: set all links to unused status */
-  for (int i = 0; i < p_colloid->n_links; i++) {
+  for (int i = 0; i < p_colloid->max_links; i++) {
     p_colloid->link_status[i] = LINK_UNUSED;
   }
   /* ... end failsafe */
@@ -421,7 +421,7 @@ int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 	}
 
   /* Check that we don't exceed the total number of links */
-  assert(link_index <= p_colloid->n_links);
+  assert(link_index <= p_colloid->max_links);
 
 	/* Next site in the cube */
       }
@@ -468,7 +468,7 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
 
   cs_nlocal_offset(cs, offset);
 
-  for (int link_index = 0; link_index < p_colloid->n_links; link_index++) {
+  for (int link_index = 0; link_index < p_colloid->max_links; link_index++) {
 
     if (p_colloid->link_status[link_index] == LINK_UNUSED) {
       /* Link is not active */
@@ -1421,7 +1421,7 @@ int build_count_faces_local_arrays(colloid_t * colloid, const lb_model_t * model
   *sa = 0.0;
   *saf = 0.0;
 
-  for (int link_index = 0; link_index < colloid->n_links; link_index++) {
+  for (int link_index = 0; link_index < colloid->max_links; link_index++) {
     if (colloid->link_status[link_index] == LINK_UNUSED) continue;
     p = colloid->linkp[link_index];
     p = model->cv[p][X]*model->cv[p][X]
@@ -1626,6 +1626,26 @@ void copy_links_to_array(colloids_info_t * cinfo) {
       pc->linkp[i] = pc->lnk->p;
       pc->link_status[i] = pc->lnk->status;
       for (int j = 0; j < 3; j++) pc->linkrb[i][j] = pc->lnk->rb[j];
+      i++;
+    }
+    pc->active_links = i;
+  }
+}
+
+void check_links_arrays(colloids_info_t * cinfo) {
+  colloid_t * pc;
+
+  colloids_info_local_head(cinfo, &pc);
+  
+  for (; pc; pc = pc->nextlocal) {
+    int i = 0;
+    colloid_link_t *lnk = pc->lnk;
+    for (; lnk; lnk = lnk->next) {
+      assert(pc->linki[i] == pc->lnk->i);
+      assert(pc->linkj[i] == pc->lnk->j);
+      assert(pc->linkp[i] == pc->lnk->p);
+      assert(pc->link_status[i] == pc->lnk->status);
+      for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == pc->lnk->rb[j]);
       i++;
     }
   }

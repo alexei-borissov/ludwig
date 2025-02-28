@@ -257,14 +257,14 @@ void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
   colloids_info_update_lists(cinfo);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
-  pc->linki = (int *) calloc(pc->n_links, sizeof(int));
-  pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
-  pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
-  pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
-  pc->linkrb = (double **) malloc(pc->n_links * sizeof(double *));
+  pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
+  pc->linki = (int *) calloc(pc->max_links, sizeof(int));
+  pc->linkj = (int *) calloc(pc->max_links, sizeof(int));
+  pc->linkp = (int *) calloc(pc->max_links, sizeof(int));
+  pc->link_status = (int *) calloc(pc->max_links, sizeof(int));
+  pc->linkrb = (double **) malloc(pc->max_links * sizeof(double *));
 
-  for (int i = 0; i < pc->n_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
+  for (int i = 0; i < pc->max_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
   assert(pc->linki);
   assert(pc->linkj);
   assert(pc->linkp);
