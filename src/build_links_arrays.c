@@ -262,6 +262,10 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 	for (; pc; pc = pc->next) {
 
 	  if (pc->s.bc != COLLOID_BC_BBL) continue;
+    
+    if (pc->linki == NULL) {
+      create_links_arrays(cinfo, pc);
+    }
 
 	  pc->sumw   = 0.0;
 	  for (ia = 0; ia < 3; ia++) {
@@ -1606,5 +1610,24 @@ int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
   }
 
   return 0;
+}
+
+void copy_links_to_array(colloids_info_t * cinfo) {
+  colloid_t * pc;
+
+  colloids_info_local_head(cinfo, &pc);
+  
+  for (; pc; pc = pc->nextlocal) {
+    int i = 0;
+    colloid_link_t *lnk = pc->lnk;
+    for (; lnk; lnk = lnk->next) {
+      pc->linki[i] = pc->lnk->i;
+      pc->linkj[i] = pc->lnk->j;
+      pc->linkp[i] = pc->lnk->p;
+      pc->link_status[i] = pc->lnk->status;
+      for (int j = 0; j < 3; j++) pc->linkrb[i][j] = pc->lnk->rb[j];
+      i++;
+    }
+  }
 }
 

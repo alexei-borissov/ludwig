@@ -252,30 +252,35 @@ static int colloids_init_check_wall(pe_t * pe, cs_t * cs,
   return 0;
 }
 
-void create_links_arrays(colloids_info_t * cinfo) {
-  colloid_t * pc;
+void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
+  int rank;
+  colloids_info_update_lists(cinfo);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  colloids_info_local_head(cinfo, &pc);
-  while (pc) {
-    /* Allocate enough space for links arrays */
-    pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
-    pc->linki = (int *) calloc(pc->n_links, sizeof(int));
-    pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
-    pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
-    pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
-    pc->linkrb = (double **) malloc(pc->n_links * sizeof(double *));
-    for (int i = 0; i < pc->n_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
-    assert(pc->linki);
-    assert(pc->linkj);
-    assert(pc->linkp);
-    assert(pc->link_status);
-    assert(pc->linkrb);
-    if (pc->linki == NULL) pe_fatal(cinfo->pe,"calloc(pc->linki) failed\n");
-    if (pc->linkj == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkj) failed\n");
-    if (pc->linkp == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkp) failed\n");
-    if (pc->link_status == NULL) pe_fatal(cinfo->pe,"calloc(pc->link_status) failed\n");
-    if (pc->linkrb == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkrb) failed\n");
+  pc->n_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
+  pc->linki = (int *) calloc(pc->n_links, sizeof(int));
+  pc->linkj = (int *) calloc(pc->n_links, sizeof(int));
+  pc->linkp = (int *) calloc(pc->n_links, sizeof(int));
+  pc->link_status = (int *) calloc(pc->n_links, sizeof(int));
+  pc->linkrb = (double **) malloc(pc->n_links * sizeof(double *));
 
-    pc = pc->next; // should this be next or nextlocal?
-  }
+  for (int i = 0; i < pc->n_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
+  assert(pc->linki);
+  assert(pc->linkj);
+  assert(pc->linkp);
+  assert(pc->link_status);
+  assert(pc->linkrb);
+  if (pc->linki == NULL) pe_fatal(cinfo->pe,"calloc(pc->linki) failed\n");
+  if (pc->linkj == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkj) failed\n");
+  if (pc->linkp == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkp) failed\n");
+  if (pc->link_status == NULL) pe_fatal(cinfo->pe,"calloc(pc->link_status) failed\n");
+  if (pc->linkrb == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkrb) failed\n");
+}
+
+void colloid_free_links_arrays(colloid_t * pc) {
+  free(pc->linki);
+  free(pc->linkj);
+  free(pc->linkp);
+  free(pc->link_status);
+  free(pc->linkrb);
 }

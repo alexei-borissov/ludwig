@@ -27,6 +27,7 @@
 #include "util_vector.h"
 #include "util_ellipsoid.h"
 #include "colloids.h"
+#include "colloids_init.h"
 
 #define RHO_DEFAULT 1.0
 #define DRMAX_DEFAULT 0.8
@@ -893,6 +894,7 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc) {
   assert(pc);
 
   colloid_link_free_list(pc->lnk);
+  colloid_free_links_arrays(pc);
   tdpAssert(tdpFree(pc));
 
   cinfo->nallocated -= 1;

@@ -190,13 +190,6 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   pe_info(pe, "\n");
 
-  colloid_t * pc;
-  colloids_info_local_head(*pinfo, &pc);
-  int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  if (pc) printf("rank %d has colloid \n", rank);
-  create_links_arrays(*pinfo);
-
   return 0;
 }
 
@@ -233,8 +226,12 @@ int colloids_rt_dynamics(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
   /* Assume there are always fully-resolved particles */
 
   build_update_map(cs, cinfo, map);
+  build_update_links_arrays(cs, cinfo, wall, map, model);
   build_update_links(cs, cinfo, wall, map, model);
   colloids_memcpy(cinfo, tdpMemcpyHostToDevice);
+
+  /* Copy linked list of links into array*/
+  copy_links_to_array(cinfo);
 
   return 0;
 }
