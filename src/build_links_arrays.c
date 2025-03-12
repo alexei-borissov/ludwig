@@ -1615,17 +1615,17 @@ int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
 void copy_links_to_array(colloids_info_t * cinfo) {
   colloid_t * pc;
 
-  colloids_info_local_head(cinfo, &pc);
+  colloids_info_all_head(cinfo, &pc);
   
-  for (; pc; pc = pc->nextlocal) {
+  for (; pc; pc = pc->nextall) {
     int i = 0;
     colloid_link_t *lnk = pc->lnk;
     for (; lnk; lnk = lnk->next) {
-      pc->linki[i] = pc->lnk->i;
-      pc->linkj[i] = pc->lnk->j;
-      pc->linkp[i] = pc->lnk->p;
-      pc->link_status[i] = pc->lnk->status;
-      for (int j = 0; j < 3; j++) pc->linkrb[i][j] = pc->lnk->rb[j];
+      pc->linki[i] = lnk->i;
+      pc->linkj[i] = lnk->j;
+      pc->linkp[i] = lnk->p;
+      pc->link_status[i] = lnk->status;
+      for (int j = 0; j < 3; j++) pc->linkrb[i][j] = lnk->rb[j];
       i++;
     }
     pc->active_links = i;
@@ -1635,19 +1635,31 @@ void copy_links_to_array(colloids_info_t * cinfo) {
 void check_links_arrays(colloids_info_t * cinfo) {
   colloid_t * pc;
 
-  colloids_info_local_head(cinfo, &pc);
+  colloids_info_all_head(cinfo, &pc);
   
-  for (; pc; pc = pc->nextlocal) {
+  for (; pc; pc = pc->nextall) {
     int i = 0;
     colloid_link_t *lnk = pc->lnk;
     for (; lnk; lnk = lnk->next) {
-      assert(pc->linki[i] == pc->lnk->i);
-      assert(pc->linkj[i] == pc->lnk->j);
-      assert(pc->linkp[i] == pc->lnk->p);
-      assert(pc->link_status[i] == pc->lnk->status);
-      for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == pc->lnk->rb[j]);
+      assert(pc->linki[i] == lnk->i);
+      assert(pc->linkj[i] == lnk->j);
+      assert(pc->linkp[i] == lnk->p);
+      assert(pc->link_status[i] == lnk->status);
+      for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == lnk->rb[j]);
       i++;
     }
   }
 }
 
+void check_colloid_links_arrays(colloid_t * pc) {
+  int i = 0;
+  colloid_link_t *lnk = pc->lnk;
+  for (; lnk; lnk = lnk->next) {
+    assert(pc->linki[i] == lnk->i);
+    assert(pc->linkj[i] == lnk->j);
+    assert(pc->linkp[i] == lnk->p);
+    assert(pc->link_status[i] == lnk->status);
+    for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == lnk->rb[j]);
+    i++;
+  }
+}
