@@ -1650,16 +1650,3 @@ void check_links_arrays(colloids_info_t * cinfo) {
     }
   }
 }
-
-void check_colloid_links_arrays(colloid_t * pc) {
-  int i = 0;
-  colloid_link_t *lnk = pc->lnk;
-  for (; lnk; lnk = lnk->next) {
-    assert(pc->linki[i] == lnk->i);
-    assert(pc->linkj[i] == lnk->j);
-    assert(pc->linkp[i] == lnk->p);
-    assert(pc->link_status[i] == lnk->status);
-    for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == lnk->rb[j]);
-    i++;
-  }
-}
