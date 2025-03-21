@@ -283,7 +283,7 @@ int build_update_links(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  /* Next colloid */
 
-	  pc->s.rebuild = 0;
+	  //pc->s.rebuild = 0;
 	}
 
 	/* Next cell */
@@ -443,8 +443,8 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
 
 	    if (status1 == MAP_FLUID) {
 	      p_link->status = LINK_FLUID;
-	      build_link_mean(p_colloid, model->wv[p], model->cv[p],
-			      p_link->rb);
+        build_link_mean(p_colloid, model->wv[p], model->cv[p],
+          p_link->rb);
 	    }
 	    else {
 	      p_link->status = LINK_COLLOID;

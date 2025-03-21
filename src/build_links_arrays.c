@@ -55,7 +55,7 @@ static int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 				   const lb_model_t * model);
 static void build_link_mean(colloid_t * pc, double wv, const int8_t cv[3],
 			    const double rb[3]);
-static int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
+static int build_colloid_wall_links_array(cs_t * cs, colloids_info_t * cinfo,
 				    colloid_t * pc, map_t * map,
 				    const lb_model_t * model);
 
@@ -276,7 +276,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 	  if (pc->s.rebuild) {
 	    /* The shape has changed, so need to reconstruct */
 	    build_reconstruct_links_array(cs, cinfo, pc, map, model);
-	    if (wall) build_colloid_wall_links(cs, cinfo, pc, map, model);
+	    if (wall) build_colloid_wall_links_array(cs, cinfo, pc, map, model);
 	  }
 	  else {
 	    /* Shape unchanged, so just reset existing links */
@@ -287,7 +287,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  /* Next colloid */
 
-	  //pc->s.rebuild = 0;
+	  pc->s.rebuild = 0;
 	}
 
 	/* Next cell */
@@ -419,6 +419,7 @@ int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 
 	  /* Next lattice vector */
 	}
+  p_colloid->active_links = link_index;
 
   /* Check that we don't exceed the total number of links */
   assert(link_index <= p_colloid->max_links);
@@ -1239,7 +1240,7 @@ static void build_link_mean(colloid_t * pc, double wv, const int8_t cv[3],
  *
  *****************************************************************************/
 
-int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
+int build_colloid_wall_links_array(cs_t * cs, colloids_info_t * cinfo,
 			     colloid_t * p_colloid, map_t * map,
 			     const lb_model_t * model) {
 
@@ -1257,8 +1258,6 @@ int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
   double rsep[3];
 
   colloid_t * pcmap = NULL;
-  colloid_link_t * p_link;
-  colloid_link_t * p_last;
 
   assert(p_colloid);
   assert(map);
@@ -1266,16 +1265,12 @@ int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
   cs_nlocal(cs, ntotal);
   cs_nlocal_offset(cs, offset);
 
-  p_link = p_colloid->lnk;
-  p_last = p_colloid->lnk;
   largestdimn = colloid_principal_radius(&p_colloid->s);
 
   /* Work out the first unused link */
 
-  while (p_link && p_link->status != LINK_UNUSED) {
-    p_last = p_link;
-    p_link = p_link->next;
-  }
+  int link_index = 0;
+  while (p_colloid->link_status[link_index] != LINK_UNUSED && link_index <= p_colloid->max_links) link_index++;
 
   /* Limits of the cube around the particle. Make sure these are
    * the appropriate lattice nodes... */
@@ -1322,44 +1317,17 @@ int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
 
 	  /* Add a link */
 
-	  if (p_link) {
-	    /* Use existing link (lambda always 0.5 at moment) */
+	  if (link_index <= p_colloid->max_links) {
+	    p_colloid->linkrb[link_index][X] = rsep[X] + lambda*model->cv[p][0];
+	    p_colloid->linkrb[link_index][Y] = rsep[Y] + lambda*model->cv[p][1];
+	    p_colloid->linkrb[link_index][Z] = rsep[Z] + lambda*model->cv[p][2];
 
-	    p_link->rb[X] = rsep[X] + lambda*model->cv[p][0];
-	    p_link->rb[Y] = rsep[Y] + lambda*model->cv[p][1];
-	    p_link->rb[Z] = rsep[Z] + lambda*model->cv[p][2];
-
-	    p_link->i = index0;
-	    p_link->j = index1;
-	    p_link->p = model->nvel - p;
-	    p_link->status = LINK_BOUNDARY;
-
-	    /* Next link */
-	    p_last = p_link;
-	    p_link = p_link->next;
-	  }
-	  else {
-	    /* Add a new link to the end of the list */
-
-	    p_link = colloid_link_allocate();
-
-	    p_link->rb[X] = rsep[X] + lambda*model->cv[p][X];
-	    p_link->rb[Y] = rsep[Y] + lambda*model->cv[p][Y];
-	    p_link->rb[Z] = rsep[Z] + lambda*model->cv[p][Z];
-
-	    p_link->i = index0;
-	    p_link->j = index1;
-	    p_link->p = model->nvel - p;
-	    p_link->status = LINK_BOUNDARY;
-
-	    /* There must be at least one link in the list. */
-	    assert(p_link);
-
-	    p_last->next = p_link;
-	    p_link->next = NULL;
-	    p_last = p_link;
-	    p_link = NULL;
-	  }
+	    p_colloid->linki[link_index] = index0;
+	    p_colloid->linkj[link_index] = index1;
+	    p_colloid->linkp[link_index] = model->nvel - p;
+	    p_colloid->link_status[link_index] = LINK_BOUNDARY;
+      link_index++;
+    }
 
 	  /* Next lattice vector */
 	}
@@ -1641,11 +1609,12 @@ void check_links_arrays(colloids_info_t * cinfo) {
     int i = 0;
     colloid_link_t *lnk = pc->lnk;
     for (; lnk; lnk = lnk->next) {
-      assert(pc->linki[i] == lnk->i);
-      assert(pc->linkj[i] == lnk->j);
-      assert(pc->linkp[i] == lnk->p);
-      assert(pc->link_status[i] == lnk->status);
-      for (int j = 0; j < 3; j++) assert(pc->linkrb[i][j] == lnk->rb[j]);
+      if (pc->linki[i] != lnk->i) printf("link %d linki doesn't match lnk->i %d %d\n", i, pc->linki[i], lnk->i);
+      if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->i %d %d\n", i, pc->linkj[i], lnk->j);
+      if (pc->linkp[i] != lnk->p) printf("link %d linkp doesn't match lnk->i %d %d\n", i, pc->linkp[i], lnk->p);
+      if (pc->link_status[i] != lnk->status) printf("link %d link_status doesn't match lnk->i %d %d\n", i, pc->link_status[i], lnk->status);
+      for (int j = 0; j < 3; j++) 
+        if (pc->linkrb[i][j] != lnk->rb[j]) printf("link %d dim %d linkrb doesn't match lnk->i %d %d\n", i, j, pc->linkrb[i][j], lnk->rb[j]);
       i++;
     }
   }

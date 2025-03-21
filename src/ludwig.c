@@ -2186,9 +2186,6 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
 		       ludwig->p, ludwig->q, ludwig->psi, ludwig->map);
   build_update_links_arrays(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
 	       &ludwig->lb->model);
-  build_update_links(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
-		     &ludwig->lb->model);
-  copy_links_to_array(ludwig->collinfo);
 
   TIMER_stop(TIMER_REBUILD);
 

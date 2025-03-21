@@ -893,7 +893,7 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc) {
   assert(cinfo);
   assert(pc);
 
-  colloid_link_free_list(pc->lnk);
+  //colloid_link_free_list(pc->lnk);
   colloid_free_links_arrays(pc);
   tdpAssert(tdpFree(pc));
 

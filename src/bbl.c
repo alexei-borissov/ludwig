@@ -229,7 +229,7 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   assert(cinfo);
 
   /* safety check to make sure links arrays are same as linked list */
-  check_links_arrays(cinfo);
+  //check_links_arrays(cinfo);
 
   cs_nlocal(bbl->cs, nlocal);
 
