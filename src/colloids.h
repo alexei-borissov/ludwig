@@ -133,6 +133,9 @@ struct colloids_info_s {
   pe_t * pe;                  /* Parallel environment */
   cs_t * cs;                  /* Coordinate system */
   colloids_info_t * target;   /* Copy of this structure on target */
+
+  colloid_t * colloids;       /* Array of local colloids */
+  colloid_t * colloids_halo;  /* Array of halo colloids */
 };
 
 __host__ int colloids_info_create(pe_t * pe, cs_t * cs, const int nvel, int ncell[3],
