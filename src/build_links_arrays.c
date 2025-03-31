@@ -1477,26 +1477,26 @@ int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
     colloid->dq[0] *= saf_local/colloid->s.saf;
     colloid->dq[1] *= saf_local/colloid->s.saf;
 
-    for (pl = colloid->lnk; pl != NULL; pl = pl->next) {
+    for (int link_index = 0; link_index < colloid->max_links; link_index++) {
 
-      if (pl->status != LINK_FLUID) continue;
+      if (colloid->link_status[link_index] != LINK_FLUID) continue;
 
-      p = pl->p;
+      p = colloid->linkp[link_index];
       p = model->cv[p][X]*model->cv[p][X]
 	+ model->cv[p][Y]*model->cv[p][Y]
 	+ model->cv[p][Z]*model->cv[p][Z];
 
       if (p == 1) {
 	/* For charge, do not drop densities below zero. */
-	psi_rho(psi, pl->i, 0, &value);
+	psi_rho(psi, colloid->linki[link_index], 0, &value);
 	if ((value + dq0) >= 0.0) {
 	  colloid->dq[0] -= dq0;
-	  psi_rho_set(psi, pl->i, 0, value + dq0);
+	  psi_rho_set(psi, colloid->linki[link_index], 0, value + dq0);
 	}
-	psi_rho(psi, pl->i, 1, &value);
+	psi_rho(psi, colloid->linki[link_index], 1, &value);
 	if ((value + dq1) >=  0.0) {
 	  colloid->dq[1] -= dq1;
-	  psi_rho_set(psi, pl->i, 1, value + dq1);
+	  psi_rho_set(psi, colloid->linki[link_index], 1, value + dq1);
 	}
       }
     }
@@ -1557,19 +1557,19 @@ int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
     dphi = colloid->s.deltaphi / colloid->s.saf;
     if (dphi == 0.0) continue;
 
-    for (pl = colloid->lnk; pl != NULL; pl = pl->next) {
+    for (int link_index = 0; link_index < colloid->max_links; link_index++) {
 
-      if (pl->status != LINK_FLUID) continue;
+      if (colloid->link_status[link_index] != LINK_FLUID) continue;
 
-      p = pl->p;
+      p = colloid->linkp[link_index];
       p = model->cv[p][X]*model->cv[p][X]
 	+ model->cv[p][Y]*model->cv[p][Y]
 	+ model->cv[p][Z]*model->cv[p][Z];
 
       if (p == 1) {
 	/* Replace */
-	field_scalar(phi, pl->i, &value);
-	field_scalar_set(phi, pl->i, value + dphi);
+	field_scalar(phi, colloid->linki[link_index], &value);
+	field_scalar_set(phi, colloid->linki[link_index], value + dphi);
       }
     }
 
