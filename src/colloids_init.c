@@ -258,13 +258,21 @@ void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->nvel);
-  pc->linki = (int *) calloc(pc->max_links, sizeof(int));
-  pc->linkj = (int *) calloc(pc->max_links, sizeof(int));
-  pc->linkp = (int *) calloc(pc->max_links, sizeof(int));
-  pc->link_status = (int *) calloc(pc->max_links, sizeof(int));
-  pc->linkrb = (double **) malloc(pc->max_links * sizeof(double *));
+  tdpAssert(tdpMallocManaged((void **) &pc->linki, pc->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->linkj, pc->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->linkp, pc->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->link_status, pc->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->linkrb, pc->max_links*sizeof(double *), tdpMemAttachGlobal));
+  for (int i = 0; i < pc->max_links; i++) {
+    tdpAssert(tdpMallocManaged((void **) &pc->linkrb[i], 3*sizeof(double), tdpMemAttachGlobal));
+    for (int j = 0; j < 3; j++) 
+      pc->linkrb[i][j] = 0.0;
+  }
+  for (int i = 0; i < pc->max_links; i++) pc->linki[i] = 0;
+  for (int i = 0; i < pc->max_links; i++) pc->linkj[i] = 0;
+  for (int i = 0; i < pc->max_links; i++) pc->linkp[i] = 0;
+  for (int i = 0; i < pc->max_links; i++) pc->link_status[i] = 0;
 
-  for (int i = 0; i < pc->max_links; i++) pc->linkrb[i] = (double *) calloc(3, sizeof(double));
   assert(pc->linki);
   assert(pc->linkj);
   assert(pc->linkp);
