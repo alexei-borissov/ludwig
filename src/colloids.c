@@ -116,6 +116,8 @@ __host__ void colloids_info_free(colloids_info_t * info) {
 
   if (info->target != info) tdpAssert(tdpFree(info->target));
 
+  colloids_array_free(&info->colloid_array);
+
   free(info);
 
   return;
@@ -1635,4 +1637,37 @@ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]) {
   cinfo->fgravity[Z] = g[Z];
 
   return 0;
+}
+
+void colloids_array_create(colloids_arrays_t * colloids_array, int n) {
+    if (n > 0) {
+      colloids_array->max_colloids = n;
+      colloids_array->colloids = (colloid_t **) malloc(n * sizeof(colloid_t *));
+    }
+}
+
+void colloids_array_free(colloids_arrays_t * colloids_array) {
+    if (colloids_array->colloids) {
+        free(colloids_array->colloids);
+    }
+}
+
+void colloids_array_resize(colloids_arrays_t * colloids_array) {
+    if (colloids_array->max_colloids > 0) {
+      colloids_array->max_colloids *= 2;
+      colloids_array->colloids = (colloid_t *) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t));
+    }
+}
+
+void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
+    colloid_t * colloid = cinfo->headlocal;
+    int i = 0;
+    for (; colloid; colloid = colloid->nextlocal) {
+        if (cinfo->colloid_array.colloids) {
+          cinfo->colloid_array.colloids[i] = colloid;
+          i++;
+        }
+    }
+
+    cinfo->colloid_array.n_colloids = i;
 }

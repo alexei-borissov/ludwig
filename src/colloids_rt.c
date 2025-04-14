@@ -190,6 +190,11 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   pe_info(pe, "\n");
 
+  int nlocal;
+  colloids_info_nlocal(*pinfo, &nlocal);
+  colloids_array_create(&(*pinfo)->colloid_array, nlocal);
+  set_colloids_array(*pinfo, nlocal);
+
   return 0;
 }
 

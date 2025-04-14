@@ -100,6 +100,14 @@ struct colloid {
   double ** linkrb;           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
 };
 
+typedef struct colloids_arrays_s colloids_arrays_t;
+
+struct colloids_arrays_s {
+    int n_colloids;
+    int max_colloids;
+    colloid_t ** colloids;
+};
+
 typedef struct colloids_info_s colloids_info_t;
 
 struct colloids_info_s {
@@ -134,8 +142,7 @@ struct colloids_info_s {
   cs_t * cs;                  /* Coordinate system */
   colloids_info_t * target;   /* Copy of this structure on target */
 
-  colloid_t * colloids;       /* Array of local colloids */
-  colloid_t * colloids_halo;  /* Array of halo colloids */
+  colloids_arrays_t colloid_array;  /* Array of local colloids */
 };
 
 __host__ int colloids_info_create(pe_t * pe, cs_t * cs, const int nvel, int ncell[3],
@@ -202,5 +209,10 @@ __host__ int colloids_ellipsoid_abc_check(colloids_info_t * info);
 
 __host__ int colloids_buoyancy_set(colloids_info_t * cinfo, const double b[3]);
 __host__ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]);
+
+__host__ void colloids_array_create(colloids_arrays_t * colloids_array, int n_colloids);
+__host__ void colloids_array_free(colloids_arrays_t * colloids_array);
+__host__ void colloids_array_resize(colloids_arrays_t * colloids_array);
+__host__ void set_colloids_array(colloids_info_t * cinfo, int n_colloids);
 
 #endif
