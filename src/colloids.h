@@ -214,5 +214,6 @@ __host__ void colloids_array_create(colloids_arrays_t * colloids_array, int n_co
 __host__ void colloids_array_free(colloids_arrays_t * colloids_array);
 __host__ void colloids_array_resize(colloids_arrays_t * colloids_array);
 __host__ void set_colloids_array(colloids_info_t * cinfo, int n_colloids);
+__host__ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo);
 
 #endif

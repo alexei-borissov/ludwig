@@ -166,6 +166,8 @@ __host__ int colloids_info_recreate(int newcell[3], colloids_info_t ** pinfo) {
     pcnew->s = pc->s;
   }
 
+  copy_colloids_array_info(oldinfo, newinfo);
+
   colloids_info_ntotal_set(newinfo);
   assert(newinfo->ntotal == (*pinfo)->ntotal);
 
@@ -1110,6 +1112,14 @@ __host__ int colloids_info_update_lists(colloids_info_t * cinfo) {
   colloids_info_list_local_build(cinfo);
   colloids_info_list_all_build(cinfo);
 
+  /* Copy over colloids pointers to array*/
+  int nlocal;
+  colloids_info_nlocal(cinfo, &nlocal);
+  if (nlocal > cinfo->colloid_array.max_colloids) {
+    colloids_array_resize(cinfo);
+  }
+  set_colloids_array(cinfo, nlocal);
+
   return 0;
 }
 
@@ -1664,10 +1674,21 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
     int i = 0;
     for (; colloid; colloid = colloid->nextlocal) {
         if (cinfo->colloid_array.colloids) {
+          assert(i < cinfo->colloid_array.max_colloids);
           cinfo->colloid_array.colloids[i] = colloid;
           i++;
         }
     }
 
     cinfo->colloid_array.n_colloids = i;
+}
+
+void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo) {
+  newinfo->colloid_array.n_colloids = oldinfo->colloid_array.n_colloids;
+  newinfo->colloid_array.max_colloids = oldinfo->colloid_array.max_colloids;
+  colloids_array_create(&newinfo->colloid_array, newinfo->colloid_array.max_colloids);
+  
+  for (int i = 0; i < newinfo->colloid_array.n_colloids; i++) {
+    newinfo->colloid_array.colloids[i] = oldinfo->colloid_array.colloids[i];
+  }
 }
