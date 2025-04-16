@@ -477,7 +477,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  for ( ; pc; pc = pc->nextall) {
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -774,6 +775,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   physics_t * phys = NULL;
   colloid_t * pc = NULL;
+  colloid_t * pc_array = NULL;
   colloid_link_t * p_link;
 
 
@@ -801,7 +803,8 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  for ( ; pc; pc = pc->nextall) {
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -916,6 +919,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     }
 
     bbl->deltag += pc->s.deltaphi;
+    i++;
   }
 
 

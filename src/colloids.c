@@ -1111,12 +1111,16 @@ __host__ int colloids_info_update_lists(colloids_info_t * cinfo) {
 
   colloids_info_list_local_build(cinfo);
   colloids_info_list_all_build(cinfo);
-
+      
   /* Copy over colloids pointers to array*/
   int nlocal;
   colloids_info_nlocal(cinfo, &nlocal);
   if (nlocal > cinfo->colloid_array.max_colloids) {
-    colloids_array_resize(cinfo);
+    if (cinfo->colloid_array.max_colloids > 0) {
+      colloids_array_resize(&cinfo->colloid_array);
+    } else {
+      colloids_array_create(&cinfo->colloid_array, nlocal);
+    }
   }
   set_colloids_array(cinfo, nlocal);
 
