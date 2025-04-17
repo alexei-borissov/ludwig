@@ -253,7 +253,6 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   }
 
   bbl_update_colloids(bbl, wall, cinfo);
-  update_colloids_array(cinfo); // XXX: Added for safety. Do we actually need it here?
 
   bbl_pass2(bbl, lb, cinfo);
 
@@ -777,7 +776,6 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   physics_t * phys = NULL;
   colloid_t * pc = NULL;
-  colloid_t * pc_array = NULL;
   colloid_link_t * p_link;
 
 
