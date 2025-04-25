@@ -75,6 +75,8 @@ __host__ tdpError_t tdpHostAlloc(void ** phost, size_t size,
 				 unsigned int flags);
 __host__ tdpError_t tdpMallocManaged(void ** devptr, size_t size,
 				     unsigned int flag);
+__host__ tdpError_t tdpReallocManaged(void ** devptr, size_t size, int factor,
+				     unsigned int flag);
 __host__ tdpError_t tdpMemcpy(void * dst, const void * src, size_t count,
 			      tdpMemcpyKind kind);
 __host__ tdpError_t tdpMemcpyAsync(void * dst, const void * src, size_t count,

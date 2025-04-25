@@ -1645,20 +1645,21 @@ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]) {
 void colloids_array_create(colloids_arrays_t * colloids_array, int n) {
     if (n > 0) {
       colloids_array->max_colloids = n;
-      colloids_array->colloids = (colloid_t **) malloc(n * sizeof(colloid_t *));
+      //colloids_array->colloids = (colloid_t **) malloc(n * sizeof(colloid_t *));
+      tdpAssert(tdpMallocManaged((void **) &colloids_array->colloids, n*sizeof(colloid_t *), tdpMemAttachGlobal));
     }
 }
 
 void colloids_array_free(colloids_arrays_t * colloids_array) {
     if (colloids_array->colloids) {
-        free(colloids_array->colloids);
+        tdpAssert( tdpFree(colloids_array->colloids) );
     }
 }
 
 void colloids_array_resize(colloids_arrays_t * colloids_array) {
     if (colloids_array->max_colloids > 0) {
+      tdpAssert( tdpReallocManaged((void **) &colloids_array->colloids, colloids_array->max_colloids*sizeof(colloid_t *), 2, tdpMemAttachGlobal) )
       colloids_array->max_colloids *= 2;
-      colloids_array->colloids = (colloid_t *) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t));
     }
 }
 
