@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2011-2024 The University of Edinburgh
+ *  (c) 2011-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -356,6 +356,13 @@ static int ludwig_rt(ludwig_t * ludwig) {
       field_io_read(ludwig->psi->psi, ntstep, &event1);
       field_io_read(ludwig->psi->rho, ntstep, &event2);
     }
+
+    /* Lattice RNG state */
+    if (ludwig->noise) {
+      io_event_t event = {0};
+      pe_info(pe, "Reading lattice rng state for step %d\n", ntstep);
+      noise_io_read(ludwig->noise, ntstep, &event);
+    }
   }
 
   /* gradient initialisation for field stuff */
@@ -393,8 +400,7 @@ static int ludwig_rt(ludwig_t * ludwig) {
   if (ntstep == 0) {
     if (nstat) stats_sigma_create(pe, cs, ludwig->fe_symm, ludwig->phi,
 				  &ludwig->stat_sigma);
-    lb_ndist(ludwig->lb, &n);
-    if (n == 2) phi_lb_from_field(ludwig->phi, ludwig->lb);
+    if (ludwig->lb->ndist == 2) phi_lb_from_field(ludwig->phi, ludwig->lb);
   }
 
   /* Initial Q_ab field required */
@@ -543,10 +549,7 @@ void ludwig_run(const char * inputfile) {
 
     /* if symmetric_lb store phi to field */
 
-
-    lb_ndist(ludwig->lb, &im);
-
-    if (im == 2) phi_lb_to_field(ludwig->phi, ludwig->lb);
+    if (ludwig->lb->ndist == 2) phi_lb_to_field(ludwig->phi, ludwig->lb);
 
     if (ludwig->phi) {
 
@@ -678,8 +681,7 @@ void ludwig_run(const char * inputfile) {
 
     /* order parameter dynamics (not if symmetric_lb) */
 
-    lb_ndist(ludwig->lb, &im);
-    if (im == 2) {
+    if (ludwig->lb->ndist == 2) {
       /* dynamics are dealt with at the collision stage (below) */
     }
     else {
@@ -882,34 +884,40 @@ void ludwig_run(const char * inputfile) {
       }
     }
 
-    if (is_phi_output_step() || is_config_step()) {
-
-      if (ludwig->phi) {
+    if (ludwig->phi) {
+      int output = (0 == util_mod(step, ludwig->phi->opts.iodata.iofreq));
+      if (output || is_config_step()) {
 	io_event_t event = {0};
 	pe_info(ludwig->pe, "Writing phi file at step %d!\n", step);
-	field_memcpy(ludwig->phi, tdpMemcpyDeviceToHost);
 	field_io_write(ludwig->phi, step, &event);
       }
+    }
 
-      if (ludwig->p) {
+    if (ludwig->p) {
+      int output = (0 == util_mod(step, ludwig->p->opts.iodata.iofreq));
+      if (output || is_config_step()) {
 	io_event_t event = {0};
 	pe_info(ludwig->pe, "Writing p file at step %d!\n", step);
-	field_memcpy(ludwig->p, tdpMemcpyDeviceToHost);
 	field_io_write(ludwig->p, step, &event);
       }
+    }
 
-      if (ludwig->q) {
+    if (ludwig->q) {
+      int output = (0 == util_mod(step, ludwig->q->opts.iodata.iofreq));
+      if (output || is_config_step()) {
 	io_event_t event = {0};
 	pe_info(ludwig->pe, "Writing q file at step %d!\n", step);
-	field_memcpy(ludwig->q, tdpMemcpyDeviceToHost);
+	/* Replacement needs to be reconsidered in a device context ... */
 	io_replace_values(ludwig->q, ludwig->map, MAP_COLLOID, 0.00001);
 	field_io_write(ludwig->q, step, &event);
       }
     }
 
     if (ludwig->psi) {
-      if (is_psi_output_step() || is_config_step()) {
-	pe_info(ludwig->pe, "Writing psi file at step %d!\n", step);
+      /* The potential and the charge densities (both controlled by "psi") */
+      int output = (0 == util_mod(step, ludwig->psi->psi->opts.iodata.iofreq));
+      if (output || is_config_step()) {
+	pe_info(ludwig->pe, "Writing electrokinetic data at step %d!\n", step);
 	psi_io_write(ludwig->psi, step);
       }
     }
@@ -933,11 +941,35 @@ void ludwig_run(const char * inputfile) {
       stats_rheology_stress_profile_zero(ludwig->stat_rheo);
     }
 
-    if (ludwig->hydro && (is_vel_output_step() || is_config_step())) {
-      io_event_t event = {0};
-      pe_info(ludwig->pe, "Writing rho/velocity output at step %d!\n", step);
-      hydro_memcpy(ludwig->hydro, tdpMemcpyDeviceToHost);
-      hydro_io_write(ludwig->hydro, step, &event);
+    /* Hydrodynamic quantities */
+    if (ludwig->hydro) {
+      if (is_config_step()) {
+	io_event_t event = {0};
+	pe_info(ludwig->pe, "Writing rho/velocity output at step %d!\n", step);
+	hydro_io_write(ludwig->hydro, step, &event);
+      }
+      else {
+	/* Individual requests */
+	if (0 == util_mod(step, ludwig->hydro->rho->opts.iodata.iofreq)) {
+	  io_event_t event = {0};
+	  pe_info(ludwig->pe, "Writing rho output at step %d!\n", step);
+	  field_io_write(ludwig->hydro->rho, step, &event);
+	}
+	if (0 == util_mod(step, ludwig->hydro->u->opts.iodata.iofreq)) {
+	  io_event_t event = {0};
+	  pe_info(ludwig->pe, "Writing velocity output at step %d!\n", step);
+	  field_io_write(ludwig->hydro->u, step, &event);
+	}
+      }
+    }
+
+    if (ludwig->noise) {
+      /* This is only part of the configuration at the moment */
+      if (is_config_step()) {
+	io_event_t event = {0};
+	pe_info(ludwig->pe, "Writing lattice rng state at step %d\n", step);
+	noise_io_write(ludwig->noise, step, &event);
+      }
     }
 
     /* Print progress report */
@@ -2136,7 +2168,6 @@ static int ludwig_colloids_update_low_freq(ludwig_t * ludwig) {
 
 int ludwig_colloids_update(ludwig_t * ludwig) {
 
-  int ndist;
   int ndevice;
   int ncolloid;
   int iconserve;         /* switch for finite-difference conservation */
@@ -2148,8 +2179,7 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
 
   tdpAssert( tdpGetDeviceCount(&ndevice) );
 
-  lb_ndist(ludwig->lb, &ndist);
-  iconserve = (ludwig->psi || (ludwig->phi && ndist == 1));
+  iconserve = (ludwig->psi || (ludwig->phi && ludwig->lb->ndist == 1));
 
   TIMER_start(TIMER_PARTICLE_HALO);
 
@@ -2169,7 +2199,7 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
     lb_halo(ludwig->lb);
   }
   else {
-    /* Pull data back, then full host halo swap */
+    /* Run the halo on the target, and copy back the data */
     lb_halo(ludwig->lb);
     lb_memcpy(ludwig->lb, tdpMemcpyDeviceToHost);
   }
