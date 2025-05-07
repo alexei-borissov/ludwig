@@ -1602,19 +1602,7 @@ void check_links_arrays(colloids_info_t * cinfo) {
   colloids_info_all_head(cinfo, &pc);
   
   for (; pc; pc = pc->nextall) {
-    //int i = 0;
     colloid_link_t *lnk = pc->lnk;
-    //for (; lnk; lnk = lnk->next) {
-    //  if (pc->linki[i] != lnk->i) printf("link %d linki doesn't match lnk->i %d %d\n", i, pc->linki[i], lnk->i);
-    //  if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->j %d %d\n", i, pc->linkj[i], lnk->j);
-    //  if (pc->linkp[i] != lnk->p) printf("link %d linkp doesn't match lnk->p %d %d\n", i, pc->linkp[i], lnk->p);
-    //  if (pc->link_status[i] != lnk->status) printf("link %d link_status doesn't match lnk->status %d %d\n", i, pc->link_status[i], lnk->status);
-    //  for (int j = 0; j < 3; j++) 
-    //    if (pc->linkrb[i][j] != lnk->rb[j]) printf("link %d dim %d linkrb doesn't match lnk->rb %d %d\n", i, j, pc->linkrb[i][j], lnk->rb[j]);
-    //  i++;
-    //}
-
-    
     for (int i = 0; i < pc->active_links; i++) {
       if (pc->linki[i] != lnk->i) printf("link %d linki doesn't match lnk->i %d %d\n", i, pc->linki[i], lnk->i);
       if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->j %d %d\n", i, pc->linkj[i], lnk->j);
