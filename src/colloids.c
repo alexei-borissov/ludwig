@@ -1645,7 +1645,6 @@ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]) {
 void colloids_array_create(colloids_arrays_t * colloids_array, int n) {
     if (n > 0) {
       colloids_array->max_colloids = n;
-      //colloids_array->colloids = (colloid_t **) malloc(n * sizeof(colloid_t *));
       tdpAssert(tdpMallocManaged((void **) &colloids_array->colloids, n*sizeof(colloid_t *), tdpMemAttachGlobal));
     }
 }
