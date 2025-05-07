@@ -446,16 +446,6 @@ __host__ tdpError_t tdpDeviceEnablePeerAccess(int peerDevice,
   return hipDeviceEnablePeerAccess(peerDevice, flags);
 }
 
-__host__ tdpError_t tdpReallocManaged(void ** devptr, size_t oldsize, int factor,
-				     unsigned int flag) {
-
-  void **newptr;
-  tdpError_t error = hipMallocManaged(newptr, oldsize * factor, flag);
-  memcpy(newptr, devptr, oldsize);
-  devptr = newptr;
-  return error;
-}
-
 /*****************************************************************************
  *
  *  tdpGraphAddKernelNode

@@ -44,7 +44,6 @@
 #include "colloids_rt.h"
 
 #include "build.h"
-#include "build_links_arrays.h"
 
 int lubrication_init(pe_t * pe, cs_t * cs, rt_t * rt, interact_t * inter);
 int pair_ss_cut_init(pe_t * pe, cs_t * cs, rt_t * rt, interact_t * inter);

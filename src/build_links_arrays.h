@@ -11,8 +11,8 @@
  *
  *****************************************************************************/
 
-#ifndef LUDWIG_BUILD_LINKS_ARRAYS_H
-#define LUDWIG_BUILD_LINKS_ARRAYS_H
+#ifndef LUDWIG_BUILD_H
+#define LUDWIG_BUILD_H
 
 #include "field.h"
 #include "map.h"
