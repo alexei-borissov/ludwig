@@ -1011,7 +1011,7 @@ void ludwig_run(const char * inputfile) {
 
   if (ludwig->stat_rheo) stats_rheology_free(ludwig->stat_rheo);
   if (ludwig->stat_turb) stats_turbulent_free(ludwig->stat_turb);
-  //if (ludwig->stat_ah)   stats_ahydro_free(ludwig->stat_ah);
+  if (ludwig->stat_ah)   stats_ahydro_free(ludwig->stat_ah);
 
   if (ludwig->phi_grad) field_grad_free(ludwig->phi_grad);
   if (ludwig->p_grad)   field_grad_free(ludwig->p_grad);
@@ -2211,11 +2211,15 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
 
   TIMER_start(TIMER_REBUILD);
 
-  build_update_map(ludwig->cs, ludwig->collinfo, ludwig->map);
-  build_remove_replace(ludwig->fe, ludwig->collinfo, ludwig->lb, ludwig->phi,
+  //build_update_map(ludwig->cs, ludwig->collinfo, ludwig->map);
+  build_update_map_links_array(ludwig->cs, ludwig->collinfo, ludwig->map);
+  build_remove_replace_links_array(ludwig->fe, ludwig->collinfo, ludwig->lb, ludwig->phi,
 		       ludwig->p, ludwig->q, ludwig->psi, ludwig->map);
+  //build_update_links(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
+  //                  &ludwig->lb->model);
   build_update_links_arrays(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
 	       &ludwig->lb->model);
+  //check_links_arrays(ludwig->collinfo);
 
   TIMER_stop(TIMER_REBUILD);
 

@@ -48,7 +48,7 @@ static int build_remove_order_parameter(lb_t * lb, field_t * f, int index,
 static int build_replace_order_parameter(fe_t * fe, lb_t * lb, colloids_info_t * cinfo,
 					 field_t * f, int index,
 					 colloid_t * pc, map_t * map);
-static int build_reset_links(cs_t * cs, colloid_t * pc, map_t * map,
+static int build_reset_links_arrays(cs_t * cs, colloid_t * pc, map_t * map,
 			     const lb_model_t * model);
 static int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 				   colloid_t * pc, map_t * map,
@@ -280,7 +280,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 	  }
 	  else {
 	    /* Shape unchanged, so just reset existing links */
-	    build_reset_links(cs, pc, map, model);
+	    build_reset_links_arrays(cs, pc, map, model);
 	  }
 
 	  build_count_faces_local_arrays(pc, model, &pc->s.sa, &pc->s.saf);
@@ -449,7 +449,7 @@ int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
  *
  ****************************************************************************/
 
-int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
+int build_reset_links_arrays(cs_t * cs, colloid_t * p_colloid, map_t * map,
 		      const lb_model_t * model) {
 
   int ia;
@@ -748,7 +748,6 @@ static int build_remove_fluid(lb_t * lb, int index, colloid_t * p_colloid) {
 
 static int build_remove_order_parameter(lb_t * lb, field_t * f, int index,
 					colloid_t * pc) {
-  int ndist;
   double phi;
   double phi0;
   physics_t * phys = NULL;
@@ -759,9 +758,8 @@ static int build_remove_order_parameter(lb_t * lb, field_t * f, int index,
 
   physics_ref(&phys);
   physics_phi0(phys, &phi0);
-  lb_ndist(lb, &ndist);
 
-  if (ndist == 2) {
+  if (lb->ndist == 2) {
     lb_0th_moment(lb, index, LB_PHI, &phi);
   }
   else {
@@ -980,7 +978,6 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
   int status;
   int ri[3];
   int nf;
-  int ndist;
   int nweight;
 
   double g;
@@ -995,7 +992,6 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
 
   assert(map);
   assert(lb);
-  lb_ndist(lb, &ndist);
 
   field_nf(f, &nf);
   assert(nf <= NQAB);
@@ -1011,7 +1007,7 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
     newg[p] = 0.0;
   }
 
-  if (ndist == 2) {
+  if (lb->ndist == 2) {
 
     /* Reset the distribution (distribution index 1) */
 
@@ -1090,7 +1086,7 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
     }
     if (nweight == 0) {
       /* No information. For phi, use existing (solid) value. */
-      if (fe->id == FE_LC) build_replace_q_local_links_array(fe, cinfo, pc, index, f);
+      if (fe->id == FE_LC) build_replace_q_local(fe, cinfo, pc, index, f);
       if (fe->id == FE_SYMMETRIC) field_scalar(f, index, phi);
     }
     else {
@@ -1606,16 +1602,27 @@ void check_links_arrays(colloids_info_t * cinfo) {
   colloids_info_all_head(cinfo, &pc);
   
   for (; pc; pc = pc->nextall) {
-    int i = 0;
+    //int i = 0;
     colloid_link_t *lnk = pc->lnk;
-    for (; lnk; lnk = lnk->next) {
+    //for (; lnk; lnk = lnk->next) {
+    //  if (pc->linki[i] != lnk->i) printf("link %d linki doesn't match lnk->i %d %d\n", i, pc->linki[i], lnk->i);
+    //  if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->j %d %d\n", i, pc->linkj[i], lnk->j);
+    //  if (pc->linkp[i] != lnk->p) printf("link %d linkp doesn't match lnk->p %d %d\n", i, pc->linkp[i], lnk->p);
+    //  if (pc->link_status[i] != lnk->status) printf("link %d link_status doesn't match lnk->status %d %d\n", i, pc->link_status[i], lnk->status);
+    //  for (int j = 0; j < 3; j++) 
+    //    if (pc->linkrb[i][j] != lnk->rb[j]) printf("link %d dim %d linkrb doesn't match lnk->rb %d %d\n", i, j, pc->linkrb[i][j], lnk->rb[j]);
+    //  i++;
+    //}
+
+    
+    for (int i = 0; i < pc->active_links; i++) {
       if (pc->linki[i] != lnk->i) printf("link %d linki doesn't match lnk->i %d %d\n", i, pc->linki[i], lnk->i);
-      if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->i %d %d\n", i, pc->linkj[i], lnk->j);
-      if (pc->linkp[i] != lnk->p) printf("link %d linkp doesn't match lnk->i %d %d\n", i, pc->linkp[i], lnk->p);
-      if (pc->link_status[i] != lnk->status) printf("link %d link_status doesn't match lnk->i %d %d\n", i, pc->link_status[i], lnk->status);
+      if (pc->linkj[i] != lnk->j) printf("link %d linkj doesn't match lnk->j %d %d\n", i, pc->linkj[i], lnk->j);
+      if (pc->linkp[i] != lnk->p) printf("link %d linkp doesn't match lnk->p %d %d\n", i, pc->linkp[i], lnk->p);
+      if (pc->link_status[i] != lnk->status) printf("link %d link_status doesn't match lnk->status %d %d\n", i, pc->link_status[i], lnk->status);
       for (int j = 0; j < 3; j++) 
-        if (pc->linkrb[i][j] != lnk->rb[j]) printf("link %d dim %d linkrb doesn't match lnk->i %d %d\n", i, j, pc->linkrb[i][j], lnk->rb[j]);
-      i++;
+        if (pc->linkrb[i][j] != lnk->rb[j]) printf("link %d dim %d linkrb doesn't match lnk->rb %d %d\n", i, j, pc->linkrb[i][j], lnk->rb[j]);
+      lnk = lnk->next;
     }
   }
 }
