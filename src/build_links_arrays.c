@@ -67,7 +67,7 @@ int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
 
 /*****************************************************************************
  *
- *  build_update_map_links_array
+ *  build_update_map_links_arrays
  *
  *  This routine is responsible for setting the solid/fluid status
  *  of all nodes in the presence on colloids. This must be complete
@@ -75,7 +75,7 @@ int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
  *
  ****************************************************************************/
 
-int build_update_map_links_array(cs_t * cs, colloids_info_t * cinfo, map_t * map) {
+int build_update_map_links_arrays(cs_t * cs, colloids_info_t * cinfo, map_t * map) {
 
   int nlocal[3];
   int noffset[3];
@@ -526,7 +526,7 @@ int build_reset_links_arrays(cs_t * cs, colloid_t * p_colloid, map_t * map,
  *
  *****************************************************************************/
 
-int build_remove_replace_links_array(fe_t * fe, colloids_info_t * cinfo, lb_t * lb,
+int build_remove_replace_links_arrays(fe_t * fe, colloids_info_t * cinfo, lb_t * lb,
 			 field_t * phi,
 			 field_t * p, field_t * q, psi_t * psi, map_t * map) {
 
@@ -1168,7 +1168,7 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
     }
     if (nweight == 0) {
       /* No information. For phi, use existing (solid) value. */
-      if (fe->id == FE_LC) build_replace_q_local(fe, cinfo, pc, index, f);
+      if (fe->id == FE_LC) build_replace_q_local_links_array(fe, cinfo, pc, index, f);
       if (fe->id == FE_SYMMETRIC) field_scalar(f, index, phi);
     }
     else {
