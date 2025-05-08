@@ -272,23 +272,14 @@ void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
   for (int i = 0; i < pc->max_links; i++) pc->linkj[i] = 0;
   for (int i = 0; i < pc->max_links; i++) pc->linkp[i] = 0;
   for (int i = 0; i < pc->max_links; i++) pc->link_status[i] = 0;
-
-  //assert(pc->linki);
-  //assert(pc->linkj);
-  //assert(pc->linkp);
-  //assert(pc->link_status);
-  //assert(pc->linkrb);
-  //if (pc->linki == NULL) pe_fatal(cinfo->pe,"calloc(pc->linki) failed\n");
-  //if (pc->linkj == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkj) failed\n");
-  //if (pc->linkp == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkp) failed\n");
-  //if (pc->link_status == NULL) pe_fatal(cinfo->pe,"calloc(pc->link_status) failed\n");
-  //if (pc->linkrb == NULL) pe_fatal(cinfo->pe,"calloc(pc->linkrb) failed\n");
 }
 
 void colloid_free_links_arrays(colloid_t * pc) {
-  tdpAssert( tdpFree(pc->linki) );
-  tdpAssert( tdpFree(pc->linkj) );
-  tdpAssert( tdpFree(pc->linkp) );
-  tdpAssert( tdpFree(pc->link_status) );
-  tdpAssert( tdpFree(pc->linkrb) );
+  if (pc->linki) {
+    tdpAssert( tdpFree(pc->linki) );
+    tdpAssert( tdpFree(pc->linkj) );
+    tdpAssert( tdpFree(pc->linkp) );
+    tdpAssert( tdpFree(pc->link_status) );
+    tdpAssert( tdpFree(pc->linkrb) );
+  }
 }

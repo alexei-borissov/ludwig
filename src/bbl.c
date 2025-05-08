@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2024 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing Authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -23,6 +23,7 @@
 
 #include "pe.h"
 #include "coords.h"
+#include "kernel.h"
 #include "physics.h"
 #include "colloid_sums.h"
 #include "util.h"
@@ -115,7 +116,7 @@ int bbl_create(pe_t * pe, cs_t * cs, lb_t * lb, bbl_t ** pobj) {
   bbl->pe = pe;
   bbl->cs = cs;
   bbl->ellipsoid_didt = BBL_ELLIPSOID_UPDATE_QUATERNION;
-  lb_ndist(lb, &bbl->ndist);
+  bbl->ndist = lb->ndist;
 
   /* I would like to obtain the viscosity from the lb data structure;
    * but it's not present at initialisation, so ... */
@@ -309,17 +310,22 @@ static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
     pc->sump /= pc->sumw;
     p_link = pc->lnk;
 
-    for (int i = 0; i < pc->active_links; i++) {
+    for (; p_link; p_link = p_link->next) {
+    //for (int i = 0; i < pc->active_links; i++) {
 
-      if (pc->link_status[i] != LINK_FLUID) continue;
+      if (p_link->status != LINK_FLUID) continue;
+      //if (pc->link_status[i] != LINK_FLUID) continue;
 
-      dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
+      dm = -lb->model.wv[p_link->p]*pc->sump;
+      //dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
 
       for (ia = 0; ia < 3; ia++) {
-	      c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
+        c[ia] = 1.0*lb->model.cv[p_link->p][ia];
+	      //c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
       }
 
-      cross_product(pc->linkrb[i], c, rbxc);
+      cross_product(p_link->rb, c, rbxc);
+      //cross_product(pc->linkrb[i], c, rbxc);
 
       for (ia = 0; ia < 3; ia++) {
 	pc->fc0[ia] += dm*c[ia];
@@ -494,9 +500,9 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  //for ( ; pc; pc = pc->nextall) {
-  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
-    pc = cinfo->colloid_array.colloids[colloid_index];
+  for ( ; pc; pc = pc->nextall) {
+  //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+  //  pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -606,7 +612,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	  assert(cost*cost <= 1.0);
 	  sint = sqrt(1.0 - cost*cost);
 
-	  cross_product(pc->linkrb[link_index], pc->s.m, vector1);
+    cross_product(pc->linkrb[link_index], pc->s.m, vector1);
     cross_product(vector1, pc->linkrb[link_index], tans);
 
 	  mod = modulus(tans);
@@ -1133,8 +1139,9 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
-    pc = cinfo->colloid_array.colloids[colloid_index];
+  for ( ; pc; pc = pc->nextall) {
+  //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+  //  pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -1249,7 +1256,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     }
 
     bbl->deltag += pc->s.deltaphi;
-    i++;
+    //i++; // XXX: This probably shouldn't be here?
   }
 
 

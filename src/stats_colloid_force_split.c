@@ -262,7 +262,7 @@ int colloid_force_from_pth(colloid_t * pc, pth_t * pth, double f[3]) {
 
     for (int ia = 0; ia < 3; ia++) {
       f[ia] += 1.0*model.cv[p][id]
-	*pth->str[addr_rank2(pth->nsites, 3, 3, pc->linki[link_index], ia, id)];
+	    *pth->str[addr_rank2(pth->nsites, 3, 3, pc->linki[link_index], ia, id)];
     }
   }
 

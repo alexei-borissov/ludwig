@@ -457,7 +457,7 @@ tdpError_t tdpReallocManaged(void ** devptr, size_t size, int factor, unsigned i
   error_return_if(size < 1, tdpErrorInvalidValue);
   error_return_if((flag & (~valid)), tdpErrorInvalidValue);
 
-  ptr = realloc(devptr, size * factor);
+  ptr = realloc(*devptr, size * factor);
   error_return_if(ptr == NULL, tdpErrorMemoryAllocation);
 
   *devptr = ptr;
