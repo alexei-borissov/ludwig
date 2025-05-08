@@ -32,6 +32,7 @@
 #include "wall.h"
 #include "build_links_arrays.h"
 #include "blue_phase.h"
+#include "colloids_init.h"
 
 
 int build_replace_fluid_local_links_arrays(colloids_info_t * info, colloid_t * pc,
@@ -629,6 +630,72 @@ int build_bbl_rebuild_flag_links_arrays(cs_t * cs, colloids_info_t * cinfo) {
 
 /*****************************************************************************
  *
+ *  build_replace_fluid_local_links_array
+ *
+ *  For COLLOID_REPLACE_POLICY_LOCAL, replace distributions
+ *  by using a reprojection based on the local solid body
+ *  velocity of the colloid that has just vacated the site.
+ *
+ *  This has the advantage (cf interpolation) of being local.
+ *  [Test coverage?]
+ *
+ *****************************************************************************/
+
+int build_replace_fluid_local_links_array(colloids_info_t * cinfo, colloid_t * pc,
+			      int index, lb_t * lb) {
+
+  int ia, ib, p;
+  double rho0;
+  double f, sdotq, udotc;
+  double rb[3], ub[3];
+  double gnew[3] = {0.0, 0.0, 0.0};
+  double tnew[3] = {0.0, 0.0, 0.0};
+
+  assert(cinfo);
+  assert(pc);
+  assert(lb);
+
+  /* Compute new distribution */
+
+  rho0 = lb->param->rho0; /* fluid density */
+  colloid_rb_ub(cinfo, pc, index, rb, ub);
+
+  for (p = 0; p < lb->model.nvel; p++) {
+    double cs2 = lb->model.cs2;
+    double rcs2 = 1.0/cs2;
+    udotc = lb->model.cv[p][X]*ub[X]
+          + lb->model.cv[p][Y]*ub[Y]
+          + lb->model.cv[p][Z]*ub[Z];
+    sdotq = 0.0;
+    for (ia = 0; ia < 3; ia++) {
+      for (ib = 0; ib < 3; ib++) {
+	double dab = (ia == ib);
+	double q = lb->model.cv[p][ia]*lb->model.cv[p][ib] - cs2*dab;
+	sdotq += q*ub[ia]*ub[ib];
+      }
+    }
+
+    f = lb->model.wv[p]*(rho0 + rcs2*udotc + 0.5*rcs2*rcs2*sdotq);
+    lb_f_set(lb, index, p, LB_RHO, f);
+
+    /* Subtract momentum from colloid (contribution to) */
+    gnew[X] -= f*lb->model.cv[p][X];
+    gnew[Y] -= f*lb->model.cv[p][Y];
+    gnew[Z] -= f*lb->model.cv[p][Z];
+  }
+
+  cross_product(rb, gnew, tnew);
+
+  for (ia = 0; ia < 3; ia++) {
+    pc->f0[ia] += gnew[ia];
+    pc->t0[ia] += tnew[ia];
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
  *  Remove replace fluid (only)
  *  Not currently used.
  *
@@ -898,66 +965,81 @@ static int build_replace_fluid(lb_t * lb, colloids_info_t * cinfo, int index,
 
 /*****************************************************************************
  *
- *  build_replace_fluid_local_links_array
+ *  build_replace_q_local_links_array
  *
- *  For COLLOID_REPLACE_POLICY_LOCAL, replace distributions
- *  by using a reprojection based on the local solid body
- *  velocity of the colloid that has just vacated the site.
- *
- *  This has the advantage (cf interpolation) of being local.
- *  [Test coverage?]
+ *  ASSUME NORMAL ANCHORING AMPLITUDE = 1/3
  *
  *****************************************************************************/
 
-int build_replace_fluid_local_links_array(colloids_info_t * cinfo, colloid_t * pc,
-			      int index, lb_t * lb) {
+int build_replace_q_local_links_array(fe_t * fe, colloids_info_t * info, colloid_t * pc,
+			  int index, field_t * q) {
 
-  int ia, ib, p;
-  double rho0;
-  double f, sdotq, udotc;
-  double rb[3], ub[3];
-  double gnew[3] = {0.0, 0.0, 0.0};
-  double tnew[3] = {0.0, 0.0, 0.0};
+  int ia, ib;
+  double rb[3], rbp[3], rhat[3];
+  double rbmod, rhat_dot_rb;
+  double qnew[3][3];
 
-  assert(cinfo);
+  double amplitude = (1.0/3.0);
+
+  fe_lc_t * fe_lc = (fe_lc_t *) fe;
+  fe_lc_param_t * lc_param = fe_lc->param;
+
+  KRONECKER_DELTA_CHAR(d);
+
+  assert(fe);
+  assert(info);
   assert(pc);
-  assert(lb);
+  assert(q);
 
-  /* Compute new distribution */
+  fe_lc_amplitude_compute(lc_param, &amplitude);
 
-  rho0 = lb->param->rho0; /* fluid density */
-  colloid_rb_ub(cinfo, pc, index, rb, ub);
+  /* For normal anchoring we determine the radial unit vector rb */
 
-  for (p = 0; p < lb->model.nvel; p++) {
-    double cs2 = lb->model.cs2;
-    double rcs2 = 1.0/cs2;
-    udotc = lb->model.cv[p][X]*ub[X]
-          + lb->model.cv[p][Y]*ub[Y]
-          + lb->model.cv[p][Z]*ub[Z];
-    sdotq = 0.0;
-    for (ia = 0; ia < 3; ia++) {
-      for (ib = 0; ib < 3; ib++) {
-	double dab = (ia == ib);
-	double q = lb->model.cv[p][ia]*lb->model.cv[p][ib] - cs2*dab;
-	sdotq += q*ub[ia]*ub[ib];
-      }
+  colloid_rb(info, pc, index, rb);
+
+  if (pc->s.shape == COLLOID_SHAPE_ELLIPSOID) {
+    /* Compute correct spheroid normal ... */
+    int isphere = util_ellipsoid_is_sphere(pc->s.elabc);
+    if (!isphere) {
+      double posvector[3] = {0};
+      util_vector_copy(3, rb, posvector);
+      util_spheroid_surface_normal(pc->s.elabc, pc->s.m, posvector, rb);
     }
-
-    f = lb->model.wv[p]*(rho0 + rcs2*udotc + 0.5*rcs2*rcs2*sdotq);
-    lb_f_set(lb, index, p, LB_RHO, f);
-
-    /* Subtract momentum from colloid (contribution to) */
-    gnew[X] -= f*lb->model.cv[p][X];
-    gnew[Y] -= f*lb->model.cv[p][Y];
-    gnew[Z] -= f*lb->model.cv[p][Z];
   }
 
-  cross_product(rb, gnew, tnew);
+  /* Make sure we have a unit vector */
+  rbmod = 1.0/sqrt(rb[X]*rb[X] + rb[Y]*rb[Y] + rb[Z]*rb[Z]);
+  rb[0] *= rbmod;
+  rb[1] *= rbmod;
+  rb[2] *= rbmod;
+
+
+  /* For planar degenerate anchoring we subtract the projection of a
+     randomly oriented unit vector on rb and renormalise the result   */
+
+  if (lc_param->coll.type == LC_ANCHORING_PLANAR) {
+
+    util_random_unit_vector(&pc->s.rng, rhat);
+
+    rhat_dot_rb = dot_product(rhat,rb);
+    rbp[0] = rhat[0] - rhat_dot_rb*rb[0];
+    rbp[1] = rhat[1] - rhat_dot_rb*rb[1];
+    rbp[2] = rhat[2] - rhat_dot_rb*rb[2];
+
+    rbmod = 1.0/sqrt(rbp[X]*rbp[X] + rbp[Y]*rbp[Y] + rbp[Z]*rbp[Z]);
+    rb[0] = rbmod * rbp[0];
+    rb[1] = rbmod * rbp[1];
+    rb[2] = rbmod * rbp[2];
+
+  }
 
   for (ia = 0; ia < 3; ia++) {
-    pc->f0[ia] += gnew[ia];
-    pc->t0[ia] += tnew[ia];
+    for (ib = 0; ib < 3; ib++) {
+      qnew[ia][ib] = 0.5*amplitude*(3.0*rb[ia]*rb[ib] - d[ia][ib]);
+    }
   }
+
+  field_tensor_set(q, index, qnew);
 
   return 0;
 }
@@ -1102,87 +1184,6 @@ static int build_replace_order_parameter(fe_t * fe, lb_t * lb,
    * which we assume means nf == 1 */
 
   pc->s.deltaphi -= (phi[0] - phi0);
-
-  return 0;
-}
-
-/*****************************************************************************
- *
- *  build_replace_q_local_links_array
- *
- *  ASSUME NORMAL ANCHORING AMPLITUDE = 1/3
- *
- *****************************************************************************/
-
-int build_replace_q_local_links_array(fe_t * fe, colloids_info_t * info, colloid_t * pc,
-			  int index, field_t * q) {
-
-  int ia, ib;
-  double rb[3], rbp[3], rhat[3];
-  double rbmod, rhat_dot_rb;
-  double qnew[3][3];
-
-  double amplitude = (1.0/3.0);
-
-  fe_lc_t * fe_lc = (fe_lc_t *) fe;
-  fe_lc_param_t * lc_param = fe_lc->param;
-
-  KRONECKER_DELTA_CHAR(d);
-
-  assert(fe);
-  assert(info);
-  assert(pc);
-  assert(q);
-
-  fe_lc_amplitude_compute(lc_param, &amplitude);
-
-  /* For normal anchoring we determine the radial unit vector rb */
-
-  colloid_rb(info, pc, index, rb);
-
-  if (pc->s.shape == COLLOID_SHAPE_ELLIPSOID) {
-    /* Compute correct spheroid normal ... */
-    int isphere = util_ellipsoid_is_sphere(pc->s.elabc);
-    if (!isphere) {
-      double posvector[3] = {0};
-      util_vector_copy(3, rb, posvector);
-      util_spheroid_surface_normal(pc->s.elabc, pc->s.m, posvector, rb);
-    }
-  }
-
-  /* Make sure we have a unit vector */
-  rbmod = 1.0/sqrt(rb[X]*rb[X] + rb[Y]*rb[Y] + rb[Z]*rb[Z]);
-  rb[0] *= rbmod;
-  rb[1] *= rbmod;
-  rb[2] *= rbmod;
-
-
-  /* For planar degenerate anchoring we subtract the projection of a
-     randomly oriented unit vector on rb and renormalise the result   */
-
-  if (lc_param->coll.type == LC_ANCHORING_PLANAR) {
-
-    util_random_unit_vector(&pc->s.rng, rhat);
-
-    rhat_dot_rb = dot_product(rhat,rb);
-    rbp[0] = rhat[0] - rhat_dot_rb*rb[0];
-    rbp[1] = rhat[1] - rhat_dot_rb*rb[1];
-    rbp[2] = rhat[2] - rhat_dot_rb*rb[2];
-
-    rbmod = 1.0/sqrt(rbp[X]*rbp[X] + rbp[Y]*rbp[Y] + rbp[Z]*rbp[Z]);
-    rb[0] = rbmod * rbp[0];
-    rb[1] = rbmod * rbp[1];
-    rb[2] = rbmod * rbp[2];
-
-  }
-
-  for (ia = 0; ia < 3; ia++) {
-    for (ib = 0; ib < 3; ib++) {
-      qnew[ia][ib] = 0.5*amplitude*(3.0*rb[ia]*rb[ib] - d[ia][ib]);
-    }
-  }
-
-  field_tensor_set(q, index, qnew);
 
   return 0;
 }

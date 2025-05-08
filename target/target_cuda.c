@@ -364,6 +364,16 @@ __host__ tdpError_t tdpMemset(void * devptr, int value, size_t count) {
   return cudaMemset(devptr, value, count);
 }
 
+__host__ tdpError_t tdpReallocManaged(void ** devptr, size_t oldsize, int factor,
+				     unsigned int flag) {
+
+  void **newptr;
+  tdpError_t error = cudaMallocManaged(newptr, oldsize * factor, flag);
+  memcpy(newptr, devptr, oldsize);
+  devptr = newptr;
+  return error;
+}
+
 __host__ __device__ tdpError_t tdpFree(void * devptr) {
 
   return cudaFree(devptr);
