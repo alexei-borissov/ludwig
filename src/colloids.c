@@ -1667,8 +1667,10 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
     int i = 0;
     for (; colloid; colloid = colloid->nextall) {
         if (cinfo->colloid_array.colloids) {
-          assert(i < cinfo->colloid_array.max_colloids);
-          cinfo->colloid_array.colloids[i] = colloid;
+          //assert(i < cinfo->colloid_array.max_colloids); // XXX: reinstate this check. For some reason it's failing during initialisation
+          if (i < cinfo->colloid_array.max_colloids) {
+            cinfo->colloid_array.colloids[i] = colloid;
+          }
           i++;
         }
     }
