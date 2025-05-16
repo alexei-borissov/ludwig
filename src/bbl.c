@@ -805,25 +805,26 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   physics_t * phys = NULL;
   colloid_t * pc = NULL;
-  colloid_link_t * p_link = NULL;
 
   assert(bbl);
   assert(lb);
   assert(cinfo);
 
-  physics_ref(&phys);
-  physics_rho0(phys, &rho0);
+  #pragma omp single 
+  {
+    physics_ref(&phys);
+    physics_rho0(phys, &rho0);
+  }
 
   /* All colloids, including halo */
 
-  colloids_info_all_head(cinfo, &pc);
+  //colloids_info_all_head(cinfo, &pc);
 
   //for ( ; pc; pc = pc->nextall) {
   for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
     pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
-
 
     elabc = pc->s.elabc;
     elc = sqrt(elabc[0]*elabc[0] - elabc[1]*elabc[1]);
@@ -837,8 +838,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     pc->diagnostic.fbuild[Y] = pc->f0[Y];
     pc->diagnostic.fbuild[Z] = pc->f0[Z];
 
-    p_link = pc->lnk;
-
     for (i = 0; i < 21; i++) {
       pc->zeta[i] = 0.0;
     }
@@ -847,18 +846,46 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
      * over the particle. Note that sumw cannot be zero here during
      * correct operation (implies the particle has no links). */
 
-    rsumw = 1.0 / pc->sumw;
-    for (ia = 0; ia < 3; ia++) {
-      pc->cbar[ia]   *= rsumw;
-      pc->rxcbar[ia] *= rsumw;
+    #pragma omp single 
+    {
+      rsumw = 1.0 / pc->sumw;
+      for (ia = 0; ia < 3; ia++) {
+        pc->cbar[ia]   *= rsumw;
+        pc->rxcbar[ia] *= rsumw;
+      }
+      pc->deltam   *= rsumw;
+      pc->s.deltaphi *= rsumw;
     }
-    pc->deltam   *= rsumw;
-    pc->s.deltaphi *= rsumw;
+    
 	  
     /* Sum over the links */
 
+    double **f0;
+    double **t0;
+    double **zeta;
+    double *sump;
+
+    int n_threads = omp_get_num_threads();  // XXX: can probably get this information from the kernel launch
+    sump = malloc(n_threads * sizeof(double));
+    f0 = malloc(n_threads * sizeof(double *));
+    t0 = malloc(n_threads * sizeof(double *));
+    zeta = malloc(n_threads * sizeof(double *));
+    for (int thread_id = 0 ; thread_id < n_threads; thread_id++) {
+      f0[thread_id] = malloc(3 * sizeof(double));
+      t0[thread_id] = malloc(3 * sizeof(double));
+      zeta[thread_id] = malloc(21 * sizeof(double));
+      for (int i = 0; i < 3; i++) {
+        f0[thread_id][i] = 0.0;
+        t0[thread_id][i] = 0.0;
+      }
+      for (int i = 0; i < 21; i++) {
+        zeta[thread_id][i] = 0.0;
+      }
+    }
+
     int link_index;
     for_simt_parallel(link_index, pc->active_links, 1) {
+      int thread_id = omp_get_thread_num();
 
       if (pc->link_status[link_index] == LINK_UNUSED) continue;
 
@@ -1021,7 +1048,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	dm += dm_a;
 
 	/* needed for mass conservation   */
-	pc->sump += dm_a;
+	sump[thread_id] += dm_a; // Note: reduction?
       }
       else {
 	/* Virtual momentum transfer for solid->solid links,
@@ -1044,8 +1071,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
        * self-consistent evaluation of new velocities. */
 
       for (ia = 0; ia < 3; ia++) {
-	pc->f0[ia] += dm*c[ia];
-	pc->t0[ia] += dm*rbxc[ia];
+	f0[thread_id][ia] += dm*c[ia];       // Note: reduction?
+	t0[thread_id][ia] += dm*rbxc[ia];    // Note: reduction?
 	/* Corrections when links are missing (close to contact) */
 	c[ia] -= pc->cbar[ia];
 	rbxc[ia] -= pc->rxcbar[ia];
@@ -1053,35 +1080,52 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
       /* Drag matrix elements */
 
-      pc->zeta[ 0] += delta*c[X]*c[X];
-      pc->zeta[ 1] += delta*c[X]*c[Y];
-      pc->zeta[ 2] += delta*c[X]*c[Z];
-      pc->zeta[ 3] += delta*c[X]*rbxc[X];
-      pc->zeta[ 4] += delta*c[X]*rbxc[Y];
-      pc->zeta[ 5] += delta*c[X]*rbxc[Z];
+      zeta[thread_id][ 0] += delta*c[X]*c[X];      // Note: all of these are reductions?
+      zeta[thread_id][ 1] += delta*c[X]*c[Y];
+      zeta[thread_id][ 2] += delta*c[X]*c[Z];
+      zeta[thread_id][ 3] += delta*c[X]*rbxc[X];
+      zeta[thread_id][ 4] += delta*c[X]*rbxc[Y];
+      zeta[thread_id][ 5] += delta*c[X]*rbxc[Z];
 
-      pc->zeta[ 6] += delta*c[Y]*c[Y];
-      pc->zeta[ 7] += delta*c[Y]*c[Z];
-      pc->zeta[ 8] += delta*c[Y]*rbxc[X];
-      pc->zeta[ 9] += delta*c[Y]*rbxc[Y];
-      pc->zeta[10] += delta*c[Y]*rbxc[Z];
+      zeta[thread_id][ 6] += delta*c[Y]*c[Y];
+      zeta[thread_id][ 7] += delta*c[Y]*c[Z];
+      zeta[thread_id][ 8] += delta*c[Y]*rbxc[X];
+      zeta[thread_id][ 9] += delta*c[Y]*rbxc[Y];
+      zeta[thread_id][10] += delta*c[Y]*rbxc[Z];
 
-      pc->zeta[11] += delta*c[Z]*c[Z];
-      pc->zeta[12] += delta*c[Z]*rbxc[X];
-      pc->zeta[13] += delta*c[Z]*rbxc[Y];
-      pc->zeta[14] += delta*c[Z]*rbxc[Z];
+      zeta[thread_id][11] += delta*c[Z]*c[Z];
+      zeta[thread_id][12] += delta*c[Z]*rbxc[X];
+      zeta[thread_id][13] += delta*c[Z]*rbxc[Y];
+      zeta[thread_id][14] += delta*c[Z]*rbxc[Z];
 
-      pc->zeta[15] += delta*rbxc[X]*rbxc[X];
-      pc->zeta[16] += delta*rbxc[X]*rbxc[Y];
-      pc->zeta[17] += delta*rbxc[X]*rbxc[Z];
+      zeta[thread_id][15] += delta*rbxc[X]*rbxc[X];
+      zeta[thread_id][16] += delta*rbxc[X]*rbxc[Y];
+      zeta[thread_id][17] += delta*rbxc[X]*rbxc[Z];
 
-      pc->zeta[18] += delta*rbxc[Y]*rbxc[Y];
-      pc->zeta[19] += delta*rbxc[Y]*rbxc[Z];
+      zeta[thread_id][18] += delta*rbxc[Y]*rbxc[Y];
+      zeta[thread_id][19] += delta*rbxc[Y]*rbxc[Z];
 
-      pc->zeta[20] += delta*rbxc[Z]*rbxc[Z];
+      zeta[thread_id][20] += delta*rbxc[Z]*rbxc[Z];
 
     }
-  
+
+    #pragma omp master 
+    for (int thread_id = 0; thread_id < omp_get_num_threads(); thread_id++) {
+      pc->sump = sump[thread_id];
+      for (int i = 0; i < 3; i++) {
+        pc->f0[i] = f0[thread_id][i];
+        pc->t0[i] = t0[thread_id][i];
+      }
+      for (int i = 0; i < 21; i++) {
+        pc->zeta[i] = zeta[thread_id][i];
+      }
+    }
+    
+    free(sump);
+    free(f0);
+    free(t0);
+    free(zeta);
+    
   }
 
   return 0;
