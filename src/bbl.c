@@ -248,18 +248,6 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_pass0(bbl, lb, cinfo);
 
-  //int diagnostic[10];
-  //int *target_diagnostic;
-  //for (int i = 0; i < 10; i++) diagnostic[i] = -1;
-  //tdpAssert(tdpMalloc((void **) &target_diagnostic, 10 * sizeof(int)));
-  //tdpAssert(tdpMemcpy(target_diagnostic, diagnostic, 10 * sizeof(int), tdpMemcpyHostToDevice));
-
-  //test_kernel<<<2, 128>>>(target_diagnostic);
-  
-  //tdpAssert(tdpMemcpy(diagnostic, target_diagnostic, 10 * sizeof(int), tdpMemcpyDeviceToHost));
-  //tdpAssert(tdpFree(target_diagnostic));
-  //for (int i = 0; i < 10; i++) printf("i %d block %d\n", i, diagnostic[i]);
-
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyDeviceToHost);
   dim3 nblk = {};
