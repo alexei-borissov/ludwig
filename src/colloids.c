@@ -1667,7 +1667,7 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
     int i = 0;
     for (; colloid; colloid = colloid->nextall) {
         if (cinfo->colloid_array.colloids) {
-          //assert(i < cinfo->colloid_array.max_colloids); // XXX: reinstate this check. For some reason it's failing during initialisation
+          assert(i < cinfo->colloid_array.max_colloids);
           if (i < cinfo->colloid_array.max_colloids) {
             cinfo->colloid_array.colloids[i] = colloid;
           }
@@ -1699,5 +1699,16 @@ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newin
   
   for (int i = 0; i < newinfo->colloid_array.n_colloids; i++) {
     newinfo->colloid_array.colloids[i] = oldinfo->colloid_array.colloids[i];
+  }
+}
+
+void colloids_array_check(colloids_info_t *cinfo) {
+  colloid_t *pc = cinfo->headall;
+  int i = 0;
+  for (; pc; pc = pc->nextall) {
+    if (pc->s.index != cinfo->colloid_array.colloids[i]->s.index)
+      printf("i %d list index %d array index %d\n", i, pc->s.index, cinfo->colloid_array.colloids[i]->s.index);
+    assert(pc->s.index == cinfo->colloid_array.colloids[i]->s.index);
+    i++;
   }
 }
