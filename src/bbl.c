@@ -1406,13 +1406,13 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     #pragma omp master 
     for (int thread_id = 0; thread_id < omp_get_num_threads(); thread_id++) {
-      pc->sump = sump[thread_id];
+      pc->sump += sump[thread_id];
       for (int i = 0; i < 3; i++) {
-        pc->f0[i] = f0[thread_id][i];
-        pc->t0[i] = t0[thread_id][i];
+        pc->f0[i] += f0[thread_id][i];
+        pc->t0[i] += t0[thread_id][i];
       }
       for (int i = 0; i < 21; i++) {
-        pc->zeta[i] = zeta[thread_id][i];
+        pc->zeta[i] += zeta[thread_id][i];
       }
     }
     
