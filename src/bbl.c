@@ -239,7 +239,7 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   assert(cinfo);
 
   /* safety check to make sure links arrays are same as linked list */
-  check_links_arrays(cinfo);
+  //check_links_arrays(cinfo);
 
   cs_nlocal(bbl->cs, nlocal);
 
@@ -308,22 +308,22 @@ static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
     pc->sump /= pc->sumw;
     p_link = pc->lnk;
 
-    //for (; p_link; p_link = p_link->next) {
-    for (int i = 0; i < pc->active_links; i++) {
+    for (; p_link; p_link = p_link->next) {
+    //for (int i = 0; i < pc->active_links; i++) {
 
-      //if (p_link->status != LINK_FLUID) continue;
-      if (pc->link_status[i] != LINK_FLUID) continue;
+      if (p_link->status != LINK_FLUID) continue;
+      //if (pc->link_status[i] != LINK_FLUID) continue;
 
-      //dm = -lb->model.wv[p_link->p]*pc->sump;
-      dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
+      dm = -lb->model.wv[p_link->p]*pc->sump;
+      //dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
 
       for (ia = 0; ia < 3; ia++) {
-        //c[ia] = 1.0*lb->model.cv[p_link->p][ia];
-	      c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
+        c[ia] = 1.0*lb->model.cv[p_link->p][ia];
+	      //c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
       }
 
-      //cross_product(p_link->rb, c, rbxc);
-      cross_product(pc->linkrb[i], c, rbxc);
+      cross_product(p_link->rb, c, rbxc);
+      //cross_product(pc->linkrb[i], c, rbxc);
 
       for (ia = 0; ia < 3; ia++) {
 	pc->fc0[ia] += dm*c[ia];
