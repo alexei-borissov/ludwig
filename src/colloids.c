@@ -1663,7 +1663,8 @@ void colloids_array_resize(colloids_arrays_t * colloids_array) {
 }
 
 void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
-    colloid_t * colloid = cinfo->headall;
+    colloid_t * colloid;
+    colloids_info_all_head(cinfo, &colloid);
     int i = 0;
     for (; colloid; colloid = colloid->nextall) {
         if (cinfo->colloid_array.colloids) {
@@ -1709,6 +1710,9 @@ void colloids_array_check(colloids_info_t *cinfo) {
     if (pc->s.index != cinfo->colloid_array.colloids[i]->s.index)
       printf("i %d list index %d array index %d\n", i, pc->s.index, cinfo->colloid_array.colloids[i]->s.index);
     assert(pc->s.index == cinfo->colloid_array.colloids[i]->s.index);
+    assert(pc->s.r[0] == cinfo->colloid_array.colloids[i]->s.r[0]);
+    assert(pc->s.r[1] == cinfo->colloid_array.colloids[i]->s.r[1]);
+    assert(pc->s.r[2] == cinfo->colloid_array.colloids[i]->s.r[2]);
     i++;
   }
 }

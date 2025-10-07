@@ -255,9 +255,10 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   dim3 nblk = {};
   dim3 ntpb = {};
   kernel_launch_param(1000, &nblk, &ntpb);
-  //tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  //update_colloids_array(cinfo); // XXX: This is apparently necessary to keep from getting max velocities that are too high. Probably needs to go somewhere else though.
+  tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
-  bbl_pass1_orig(bbl, lb, cinfo);
+  //bbl_pass1_orig(bbl, lb, cinfo);
   //bbl_pass1(bbl, lb, cinfo);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
@@ -269,8 +270,8 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  bbl_pass2_orig(bbl, lb, cinfo);
-  //bbl_pass2(bbl, lb, cinfo);
+  //bbl_pass2_orig(bbl, lb, cinfo);
+  bbl_pass2(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
@@ -308,22 +309,22 @@ static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
     pc->sump /= pc->sumw;
     p_link = pc->lnk;
 
-    for (; p_link; p_link = p_link->next) {
-    //for (int i = 0; i < pc->active_links; i++) {
+    //for (; p_link; p_link = p_link->next) {
+    for (int i = 0; i < pc->active_links; i++) {
 
-      if (p_link->status != LINK_FLUID) continue;
-      //if (pc->link_status[i] != LINK_FLUID) continue;
+      //if (p_link->status != LINK_FLUID) continue;
+      if (pc->link_status[i] != LINK_FLUID) continue;
 
-      dm = -lb->model.wv[p_link->p]*pc->sump;
-      //dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
+      //dm = -lb->model.wv[p_link->p]*pc->sump;
+      dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
 
       for (ia = 0; ia < 3; ia++) {
-        c[ia] = 1.0*lb->model.cv[p_link->p][ia];
-	      //c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
+        //c[ia] = 1.0*lb->model.cv[p_link->p][ia];
+	      c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
       }
 
-      cross_product(p_link->rb, c, rbxc);
-      //cross_product(pc->linkrb[i], c, rbxc);
+      //cross_product(p_link->rb, c, rbxc);
+      cross_product(pc->linkrb[i], c, rbxc);
 
       for (ia = 0; ia < 3; ia++) {
 	pc->fc0[ia] += dm*c[ia];
@@ -799,11 +800,11 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   /* All colloids, including halo */
 
-  colloids_info_all_head(cinfo, &pc);
+  //colloids_info_all_head(cinfo, &pc);
 
-  for ( ; pc; pc = pc->nextall) {
-  //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
-  //  pc = cinfo->colloid_array.colloids[colloid_index];
+  //for ( ; pc; pc = pc->nextall) {
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -1113,9 +1114,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   /* All colloids, including halo */
 
-  //colloids_info_all_head(cinfo, &pc);
-
-  //for ( ; pc; pc = pc->nextall) {
   for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
     pc = cinfo->colloid_array.colloids[colloid_index];
 
@@ -1420,7 +1418,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     free(f0);
     free(t0);
     free(zeta);
-    
   }
 
   return 0;
