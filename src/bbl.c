@@ -1152,33 +1152,23 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     
 	  
     /* Sum over the links */
-
-    double **f0;
-    double **t0;
-    double **zeta;
-    double *sump;
-
-    int n_threads = omp_get_num_threads();  // XXX: can probably get this information from the kernel launch
-    sump = malloc(n_threads * sizeof(double));
-    f0 = malloc(n_threads * sizeof(double *));
-    t0 = malloc(n_threads * sizeof(double *));
-    zeta = malloc(n_threads * sizeof(double *));
-    for (int thread_id = 0 ; thread_id < n_threads; thread_id++) {
-      f0[thread_id] = malloc(3 * sizeof(double));
-      t0[thread_id] = malloc(3 * sizeof(double));
-      zeta[thread_id] = malloc(21 * sizeof(double));
-      for (int i = 0; i < 3; i++) {
-        f0[thread_id][i] = 0.0;
-        t0[thread_id][i] = 0.0;
-      }
-      for (int i = 0; i < 21; i++) {
-        zeta[thread_id][i] = 0.0;
-      }
+    __shared__ double sump[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK];
+    __shared__ double f0[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][3];
+    __shared__ double t0[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][3];
+    __shared__ double zeta[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][21];
+    
+    int tid = threadIdx.x;
+    sump[TARGET_PAD * tid] = 0.0;
+    for (int i = 0; i < 3; i++) {
+      f0[TARGET_PAD * tid][i] = 0.0;
+      t0[TARGET_PAD * tid][i] = 0.0;
+    }
+    for (int i = 0; i < 21; i++) {
+      zeta[TARGET_PAD * tid][i] = 0.0;
     }
 
     int link_index;
     for_simt_parallel(link_index, pc->active_links, 1) {
-      int thread_id = omp_get_thread_num();
 
       if (pc->link_status[link_index] == LINK_UNUSED) continue;
 
@@ -1341,7 +1331,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	dm += dm_a;
 
 	/* needed for mass conservation   */
-	sump[thread_id] += dm_a; // Note: reduction?
+	sump[TARGET_PAD * tid] += dm_a; // Note: reduction?
       }
       else {
 	/* Virtual momentum transfer for solid->solid links,
@@ -1364,8 +1354,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
        * self-consistent evaluation of new velocities. */
 
       for (ia = 0; ia < 3; ia++) {
-	f0[thread_id][ia] += dm*c[ia];       // Note: reduction?
-	t0[thread_id][ia] += dm*rbxc[ia];    // Note: reduction?
+	f0[TARGET_PAD * tid][ia] += dm*c[ia];       // Note: reduction?
+	t0[TARGET_PAD * tid][ia] += dm*rbxc[ia];    // Note: reduction?
 	/* Corrections when links are missing (close to contact) */
 	c[ia] -= pc->cbar[ia];
 	rbxc[ia] -= pc->rxcbar[ia];
@@ -1373,51 +1363,46 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
       /* Drag matrix elements */
 
-      zeta[thread_id][ 0] += delta*c[X]*c[X];      // Note: all of these are reductions?
-      zeta[thread_id][ 1] += delta*c[X]*c[Y];
-      zeta[thread_id][ 2] += delta*c[X]*c[Z];
-      zeta[thread_id][ 3] += delta*c[X]*rbxc[X];
-      zeta[thread_id][ 4] += delta*c[X]*rbxc[Y];
-      zeta[thread_id][ 5] += delta*c[X]*rbxc[Z];
+      zeta[TARGET_PAD * tid][ 0] += delta*c[X]*c[X];      // Note: all of these are reductions?
+      zeta[TARGET_PAD * tid][ 1] += delta*c[X]*c[Y];
+      zeta[TARGET_PAD * tid][ 2] += delta*c[X]*c[Z];
+      zeta[TARGET_PAD * tid][ 3] += delta*c[X]*rbxc[X];
+      zeta[TARGET_PAD * tid][ 4] += delta*c[X]*rbxc[Y];
+      zeta[TARGET_PAD * tid][ 5] += delta*c[X]*rbxc[Z];
 
-      zeta[thread_id][ 6] += delta*c[Y]*c[Y];
-      zeta[thread_id][ 7] += delta*c[Y]*c[Z];
-      zeta[thread_id][ 8] += delta*c[Y]*rbxc[X];
-      zeta[thread_id][ 9] += delta*c[Y]*rbxc[Y];
-      zeta[thread_id][10] += delta*c[Y]*rbxc[Z];
+      zeta[TARGET_PAD * tid][ 6] += delta*c[Y]*c[Y];
+      zeta[TARGET_PAD * tid][ 7] += delta*c[Y]*c[Z];
+      zeta[TARGET_PAD * tid][ 8] += delta*c[Y]*rbxc[X];
+      zeta[TARGET_PAD * tid][ 9] += delta*c[Y]*rbxc[Y];
+      zeta[TARGET_PAD * tid][10] += delta*c[Y]*rbxc[Z];
 
-      zeta[thread_id][11] += delta*c[Z]*c[Z];
-      zeta[thread_id][12] += delta*c[Z]*rbxc[X];
-      zeta[thread_id][13] += delta*c[Z]*rbxc[Y];
-      zeta[thread_id][14] += delta*c[Z]*rbxc[Z];
+      zeta[TARGET_PAD * tid][11] += delta*c[Z]*c[Z];
+      zeta[TARGET_PAD * tid][12] += delta*c[Z]*rbxc[X];
+      zeta[TARGET_PAD * tid][13] += delta*c[Z]*rbxc[Y];
+      zeta[TARGET_PAD * tid][14] += delta*c[Z]*rbxc[Z];
 
-      zeta[thread_id][15] += delta*rbxc[X]*rbxc[X];
-      zeta[thread_id][16] += delta*rbxc[X]*rbxc[Y];
-      zeta[thread_id][17] += delta*rbxc[X]*rbxc[Z];
+      zeta[TARGET_PAD * tid][15] += delta*rbxc[X]*rbxc[X];
+      zeta[TARGET_PAD * tid][16] += delta*rbxc[X]*rbxc[Y];
+      zeta[TARGET_PAD * tid][17] += delta*rbxc[X]*rbxc[Z];
 
-      zeta[thread_id][18] += delta*rbxc[Y]*rbxc[Y];
-      zeta[thread_id][19] += delta*rbxc[Y]*rbxc[Z];
+      zeta[TARGET_PAD * tid][18] += delta*rbxc[Y]*rbxc[Y];
+      zeta[TARGET_PAD * tid][19] += delta*rbxc[Y]*rbxc[Z];
 
-      zeta[thread_id][20] += delta*rbxc[Z]*rbxc[Z];
+      zeta[TARGET_PAD * tid][20] += delta*rbxc[Z]*rbxc[Z];
 
     }
 
     #pragma omp master 
-    for (int thread_id = 0; thread_id < omp_get_num_threads(); thread_id++) {
-      pc->sump += sump[thread_id];
+    for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
+      pc->sump += sump[TARGET_PAD * thread_id];
       for (int i = 0; i < 3; i++) {
-        pc->f0[i] += f0[thread_id][i];
-        pc->t0[i] += t0[thread_id][i];
+        pc->f0[i] += f0[TARGET_PAD * thread_id][i];
+        pc->t0[i] += t0[TARGET_PAD * thread_id][i];
       }
       for (int i = 0; i < 21; i++) {
-        pc->zeta[i] += zeta[thread_id][i];
+        pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
       }
     }
-    
-    free(sump);
-    free(f0);
-    free(t0);
-    free(zeta);
   }
 
   return 0;
