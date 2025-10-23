@@ -2221,7 +2221,7 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
 
   if (iconserve) {
     colloid_sums_halo(ludwig->collinfo, COLLOID_SUM_CONSERVATION);
-    build_conservation(ludwig->collinfo, ludwig->phi, ludwig->psi,
+    build_conservation_links_arrays(ludwig->collinfo, ludwig->phi, ludwig->psi,
 		       &ludwig->lb->model);
   }
 

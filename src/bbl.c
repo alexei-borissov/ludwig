@@ -255,11 +255,11 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   dim3 nblk = {};
   dim3 ntpb = {};
   kernel_launch_param(1000, &nblk, &ntpb);
-  //update_colloids_array(cinfo); // XXX: This is apparently necessary to keep from getting max velocities that are too high. Probably needs to go somewhere else though.
-  tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  update_colloids_array(cinfo); // XXX: This is apparently necessary to keep from getting max velocities that are too high. Probably needs to go somewhere else though.
+  //tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
   //bbl_pass1_orig(bbl, lb, cinfo);
-  //bbl_pass1(bbl, lb, cinfo);
+  bbl_pass1(bbl, lb, cinfo);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
 
