@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <fenv.h>
+#include <signal.h>
 
 #include "pe.h"
 #include "coords.h"
@@ -34,6 +36,11 @@
 #include "colloid.h"
 #include "colloids.h"
 #include "build_links_arrays.h"
+
+void handler(int sig) {
+    printf("%s:%d Floating Point Exception\n", __FILE__, __LINE__);
+    exit(0);
+}
 
 
 /* Ellipsoid update mechanism flag */
@@ -256,10 +263,10 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   dim3 ntpb = {};
   kernel_launch_param(1000, &nblk, &ntpb);
   update_colloids_array(cinfo); // XXX: This is apparently necessary to keep from getting max velocities that are too high. Probably needs to go somewhere else though.
-  //tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
   //bbl_pass1_orig(bbl, lb, cinfo);
-  bbl_pass1(bbl, lb, cinfo);
+  //bbl_pass1(bbl, lb, cinfo);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
 
@@ -1106,11 +1113,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   assert(lb);
   assert(cinfo);
 
-  #pragma omp single 
-  {
-    physics_ref(&phys);
-    physics_rho0(phys, &rho0);
-  }
+  physics_ref(&phys);
+  physics_rho0(phys, &rho0);
 
   /* All colloids, including halo */
 
@@ -1127,20 +1131,18 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     /* Diagnostic record of f0 before additions are made. */
     /* Really, f0 should not be used for dual purposes... */
 
-    pc->diagnostic.fbuild[X] = pc->f0[X];
-    pc->diagnostic.fbuild[Y] = pc->f0[Y];
-    pc->diagnostic.fbuild[Z] = pc->f0[Z];
+      pc->diagnostic.fbuild[X] = pc->f0[X];
+      pc->diagnostic.fbuild[Y] = pc->f0[Y];
+      pc->diagnostic.fbuild[Z] = pc->f0[Z];
 
-    for (i = 0; i < 21; i++) {
-      pc->zeta[i] = 0.0;
-    }
+      for (i = 0; i < 21; i++) {
+        pc->zeta[i] = 0.0;
+      }
 
-    /* We need to normalise link quantities by the sum of weights
-     * over the particle. Note that sumw cannot be zero here during
-     * correct operation (implies the particle has no links). */
+      /* We need to normalise link quantities by the sum of weights
+       * over the particle. Note that sumw cannot be zero here during
+       * correct operation (implies the particle has no links). */
 
-    #pragma omp single 
-    {
       rsumw = 1.0 / pc->sumw;
       for (ia = 0; ia < 3; ia++) {
         pc->cbar[ia]   *= rsumw;
@@ -1148,8 +1150,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
       }
       pc->deltam   *= rsumw;
       pc->s.deltaphi *= rsumw;
-    }
-    
+
 	  
     /* Sum over the links */
     __shared__ double sump[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK];
@@ -1169,9 +1170,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     int link_index;
     for_simt_parallel(link_index, pc->active_links, 1) {
-
       if (pc->link_status[link_index] == LINK_UNUSED) continue;
-
+  
       i = pc->linki[link_index];              /* index site i (outside) */
       j = pc->linkj[link_index];              /* index site j (inside) */
       ij = pc->linkp[link_index];             /* link velocity index i->j */
@@ -1391,21 +1391,55 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
       zeta[TARGET_PAD * tid][20] += delta*rbxc[Z]*rbxc[Z];
 
     }
+    __syncthreads();
 
-    #pragma omp master 
-    for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
-      pc->sump += sump[TARGET_PAD * thread_id];
+    if (tid == 0) {
+      double sump_total = 0.0;
+      double f0_total[3] = {0.0, 0.0, 0.0};
+      double t0_total[3] = {0.0, 0.0, 0.0};
+      double zeta_total[21];
+      for (int i = 0; i < 21; i++) {
+        zeta_total[i] = 0.0;
+      }
+
+      for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
+        sump_total += sump[TARGET_PAD * thread_id];
+        for (int i = 0; i < 3; i++) {
+          f0_total[i] += f0[TARGET_PAD * thread_id][i];
+          t0_total[i] += t0[TARGET_PAD * thread_id][i];
+        }
+        for (int i = 0; i < 21; i++) {
+          zeta_total[i] += zeta[TARGET_PAD * thread_id][i];
+        }
+      }
+
+      tdpAtomicAddDouble(&pc->sump, sump_total);
       for (int i = 0; i < 3; i++) {
-        pc->f0[i] += f0[TARGET_PAD * thread_id][i];
-        pc->t0[i] += t0[TARGET_PAD * thread_id][i];
+        tdpAtomicAddDouble(&pc->f0[i], f0_total[i]);
+        tdpAtomicAddDouble(&pc->t0[i], t0_total[i]);
       }
       for (int i = 0; i < 21; i++) {
-        pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
+        tdpAtomicAddDouble(&pc->zeta[i], zeta_total[i]);
       }
     }
-  }
 
-  return 0;
+    //#pragma omp master 
+    //for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
+    //  assert(!isnan(sump[TARGET_PAD * thread_id]));
+    //  pc->sump += sump[TARGET_PAD * thread_id];
+    //  for (int i = 0; i < 3; i++) {
+    //    assert(!isnan(f0[TARGET_PAD * thread_id][i]));
+    //    assert(!isnan(t0[TARGET_PAD * thread_id][i]));
+    //    pc->f0[i] += f0[TARGET_PAD * thread_id][i];
+    //    pc->t0[i] += t0[TARGET_PAD * thread_id][i];
+    //  }
+    //  for (int i = 0; i < 21; i++) {
+    //    assert(!isnan(zeta[TARGET_PAD * thread_id][i]));
+    //    pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
+    //  }
+    //}
+  }
+  __syncthreads();
 }
 
 static int bbl_pass2_orig(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
