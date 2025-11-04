@@ -26,7 +26,7 @@
  *  Edinburgh Parallel Computing Centre
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
- *  (c) 2012-2022 The University of Edinburgh
+ *  (c) 2012-2025 The University of Edinburgh
  *
  *****************************************************************************/
 
@@ -153,6 +153,8 @@ int main(int argc, char ** argv) {
     state[n].q0 = q0;
     state[n].q1 = q1;
     state[n].rng = 1 + n;
+    state[n].bc  = COLLOID_BC_BBL;
+    state[n].shape = COLLOID_SHAPE_SPHERE;
   }
 
   if (vf < 0.35) {

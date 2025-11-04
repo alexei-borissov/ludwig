@@ -1,6 +1,15 @@
 
 ### Changes
 
+version 0.23.1
+
+- Bug fix: https://github.com/ludwig-cf/ludwig/issues/360
+  Colloid input from files in pre version 20 formats was incompletely
+  translated leaving some colloids in an incorrect state in which the
+  colloid was present but had no boundary conditions. This is fixed.
+  The utility programs for generating colloid files have been updated
+  to be consistent with the current format.
+
 version 0.23.0
 
 - Action required. Changes to input file keys related to frequency of i/o.

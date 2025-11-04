@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2024 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -1566,7 +1566,9 @@ int colloids_type_check(colloids_info_t * info) {
   colloids_info_update_lists(info);
 
   colloids_info_local_head(info, &pc);
-  for (; pc; pc = pc->next) nupdate += colloid_type_check(&pc->s);
+  for (; pc; pc = pc->nextlocal) {
+    nupdate += colloid_type_check(&pc->s);
+  }
 
   return nupdate;
 }
