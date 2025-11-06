@@ -254,7 +254,9 @@ void  tdp_x86_postlaunch(void);
   _Pragma("omp parallel")					       \
   {								       \
     tdp_x86_prelaunch(nblocks, nthreads);			       \
-    kernel(__VA_ARGS__);					       \
+    for (blockIdx.x = 0; blockIdx.x < gridDim.x; ++blockIdx.x) {       \
+      kernel(__VA_ARGS__);					       \
+    }								       \
     tdp_x86_postlaunch();					       \
   }
 

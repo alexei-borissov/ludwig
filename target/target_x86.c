@@ -104,16 +104,21 @@ __host__ void tdp_x86_prelaunch(dim3 nblocks, dim3 nthreads) {
 
   /* sanity checks on user settings here... */
 
-  gridDim.x = 1; /* Assert this for host implementation */
-
   /* In case we request fewer threads than are available: */
 
   omp_set_num_threads(blockDim.x*blockDim.y*blockDim.z);
 
+  /* A serial loop in the block index is implemented as part of the
+   * kernel launch. Typically only one block. */
+
+  blockIdx.x = 0;
+  blockIdx.y = 0;
+  blockIdx.z = 0;
+
   /* Check blockDim, blockIdx ? */
   threadIdx.x = omp_get_thread_num();
-  threadIdx.y = 1;
-  threadIdx.z = 1;
+  threadIdx.y = 0;
+  threadIdx.z = 0;
 
   return;
 }
