@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2020-2024 The University of Edinburgh
+ *  (c) 2020-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *    Nikola Vasilev: did the original implementation in 2020.
@@ -94,6 +94,12 @@ __device__ double tdpAtomicAddDouble(double * sum, double val) {
 
 __device__ double tdpAtomicMinDouble(double * minval, double val) {
 
+#if __HIPCC__
+
+  return atomicMin(minval, val);
+
+#else
+
   unsigned long long int * address_as_ull = (unsigned long long int *) minval;
   unsigned long long int old = *address_as_ull;
   unsigned long long int assumed;
@@ -105,6 +111,7 @@ __device__ double tdpAtomicMinDouble(double * minval, double val) {
   } while (assumed != old);
 
   return __longlong_as_double(old);
+#endif
 }
 
 /*****************************************************************************
@@ -114,6 +121,12 @@ __device__ double tdpAtomicMinDouble(double * minval, double val) {
  *****************************************************************************/
 
 __device__ double tdpAtomicMaxDouble(double * address, double val) {
+
+#if __HIPCC__
+
+  return atomicMax(address, val);
+
+#else
 
   if (*address >= val) return *address;
 
@@ -130,6 +143,7 @@ __device__ double tdpAtomicMaxDouble(double * address, double val) {
 
     return __longlong_as_double(old);
   }
+#endif
 }
 
 /*****************************************************************************

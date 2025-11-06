@@ -5,7 +5,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2012-2024 The University of Edinburgh
+ *  (c) 2012-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -58,6 +58,7 @@ int map_finalise(map_t * map);
 int map_memcpy(map_t * map, tdpMemcpyKind flag);
 int map_pm(map_t * map, int * porous_media_flag);
 int map_pm_set(map_t * map, int porous_media_flag);
+int map_data_set_uniform(map_t * map, int status, const double * data);
 int map_volume_local(map_t * obj, int status, int * volume);
 int map_volume_allreduce(map_t * obj, int status, int * volume);
 int map_halo(map_t * obj);
@@ -139,7 +140,7 @@ static inline int map_data(const map_t * map, int index, double * data) {
  *****************************************************************************/
 
 __host__ __device__
-static inline int map_data_set(map_t * map, int index, double * data) {
+static inline int map_data_set(map_t * map, int index, const double * data) {
 
   assert(map);
   assert(data);

@@ -138,7 +138,7 @@ Momentum - x y z
 
 Velocity - x y z
 [minimum ] -6.8238846e-08 -3.1909581e-10  0.0000000e+00
-[maximum ]  6.8238846e-08  1.1754944e-38  1.1754944e-38
+[maximum ]  6.8238846e-08 -1.4265310e-10  0.0000000e+00
 
 Completed cycle 10
 

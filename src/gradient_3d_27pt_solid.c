@@ -93,6 +93,15 @@ __host__ int grad_3d_27pt_solid_map_set(map_t * map) {
   }
   else if (map->ndata == 2) {
     /* Assume we have colloid non-uniform wetting */
+    /* In order that we may include walls, we have to transfer the uniform
+     * wetting parameters to the map */
+    /* As a colloid can never occupy a wall site, there should be no
+     * conflicts in the relevant halo regions */
+
+    double data[2] = {static_solid.c, static_solid.h};
+    map_data_set_uniform(map, MAP_BOUNDARY, data);
+
+    /* And we must use the map values */
     static_solid.uniform = 0;
   }
   else {

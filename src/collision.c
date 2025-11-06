@@ -1014,82 +1014,159 @@ __device__ void lb_collision_mrt2_site(lb_t * lb, hydro_t * hydro,
 
 /*****************************************************************************
  *
- *  collision_stats_kt
+ *  lb_collision_kt_stats
  *
  *  Reports the equipartition of momentum, and the actual temperature
- *  cf. the expected (input) temperature.
+ *  cf. the expected (input) temperature. Kernel and driver.
  *
  *****************************************************************************/
 
-int lb_collision_stats_kt(lb_t * lb, map_t * map) {
+__global__ void lb_collision_kt_stats_kernel(kernel_3d_t k3d,
+					     const lb_t * lb,
+					     const map_t * map,
+					     double * result4) {
+  int kindex = 0;
+  int tid = threadIdx.x;
 
-  int nlocal[3];
+  __shared__ double gv[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double gx[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double gy[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double gz[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
 
-  double glocal[4];
-  double gtotal[4];
-  double rrho;
-  double gsite[3];
-  double kt;
-  physics_t * phys = NULL;
-  MPI_Comm comm;
+  gv[TARGET_PAD*tid] = 0.0;
+  gx[TARGET_PAD*tid] = 0.0;
+  gy[TARGET_PAD*tid] = 0.0;
+  gz[TARGET_PAD*tid] = 0.0;
 
-  assert(lb);
-  assert(map);
+  for_simt_parallel(kindex, k3d.kiterations, 1) {
+
+    int ic = kernel_3d_ic(&k3d, kindex);
+    int jc = kernel_3d_jc(&k3d, kindex);
+    int kc = kernel_3d_kc(&k3d, kindex);
+
+    int index = cs_index(lb->cs, ic, jc, kc);
+    int map00 = -1;
+
+    map_status(map, index, &map00);
+
+    if (map00 == MAP_FLUID) {
+
+      /* Accumulate local rho, momentum */
+
+      double rho   = 0.0;
+      double mv[3] = {0.0, 0.0, 0.0};
+
+      for (int p = 0; p < lb->nvel; p++) {
+	int laddr = LB_ADDR(lb->nsite, lb->ndist, lb->nvel, index, LB_RHO, p);
+	rho   += lb->f[laddr];
+	mv[X] += lb->f[laddr]*lb->model.cv[p][X];
+	mv[Y] += lb->f[laddr]*lb->model.cv[p][Y];
+	mv[Z] += lb->f[laddr]*lb->model.cv[p][Z];
+      }
+
+      rho = 1.0/rho; /* g = m^2/rho */
+
+      gv[TARGET_PAD*tid] += 1.0;
+      gx[TARGET_PAD*tid] += rho*mv[X]*mv[X];
+      gy[TARGET_PAD*tid] += rho*mv[Y]*mv[Y];
+      gz[TARGET_PAD*tid] += rho*mv[Z]*mv[Z];
+    }
+  }
+
+  __syncthreads();
+
+  if (tid == 0) {
+    double gvb = 0.0;
+    double gxb = 0.0;
+    double gyb = 0.0;
+    double gzb = 0.0;
+
+    for (int it = 0; it < blockDim.x; it++) {
+      gvb += gv[TARGET_PAD*it];
+      gxb += gx[TARGET_PAD*it];
+      gyb += gy[TARGET_PAD*it];
+      gzb += gz[TARGET_PAD*it];
+    }
+
+    tdpAtomicAddDouble(result4 + X, gxb);
+    tdpAtomicAddDouble(result4 + Y, gyb);
+    tdpAtomicAddDouble(result4 + Z, gzb);
+    tdpAtomicAddDouble(result4 + 3, gvb);
+  }
+
+  return;
+}
+
+
+int lb_collision_kt_stats(const lb_t * lb, const map_t * map) {
+
+  int nlocal[3] = {0};
+  double kt = 0.0;         /* expected temperature */
+  double results[4] = {0}; /* mv x, y, z, volume */
 
   if (lb->param->noise == 0) return 0;
 
-  physics_ref(&phys);
-  physics_kt(phys, &kt);
-
   cs_nlocal(lb->cs, nlocal);
 
-  glocal[X] = 0.0;
-  glocal[Y] = 0.0;
-  glocal[Z] = 0.0;
-  glocal[3] = 0.0; /* volume of fluid */
+  {
+    physics_t * phys = NULL;
+    physics_ref(&phys);
+    physics_kt(phys, &kt);
+  }
 
-  for (int ic = 1; ic <= nlocal[X]; ic++) {
-    for (int jc = 1; jc <= nlocal[Y]; jc++) {
-      for (int kc = 1; kc <= nlocal[Z]; kc++) {
+  /* Run the kernel */
 
-	int index = cs_index(lb->cs, ic, jc, kc);
-	int status = MAP_FLUID;
-	map_status(map, index, &status);
-	if (status != MAP_FLUID) continue;
+  {
+    dim3 nblk = {0};
+    dim3 ntpb = {0};
+    cs_limits_t lim = {1, nlocal[X], 1, nlocal[Y], 1, nlocal[Z]};
+    kernel_3d_t k3d = kernel_3d(lb->cs, lim);
 
-	lb_0th_moment(lb, index, LB_RHO, &rrho);
-	rrho = 1.0/rrho;
-	lb_1st_moment(lb, index, LB_RHO, gsite);
+    size_t sz = 4*sizeof(double);
+    double * results_d = NULL;
 
-	for (int n = 0; n < 3; n++) {
-	  glocal[n] += gsite[n]*gsite[n]*rrho;
-	}
+    tdpAssert( tdpMalloc((void **) &results_d, sz) );
+    tdpAssert( tdpMemcpy(results_d, results, sz, tdpMemcpyHostToDevice) );
 
-	glocal[3] += 1.0;
+    kernel_3d_launch_param(k3d.kiterations, &nblk, &ntpb);
 
-	/* Next cell */
-      }
-    }
+    tdpLaunchKernel(lb_collision_kt_stats_kernel, nblk, ntpb, 0, 0,
+		    k3d, lb->target, map->target, results_d);
+
+    tdpAssert( tdpPeekAtLastError() );
+    tdpAssert( tdpStreamSynchronize(0) );
+
+    tdpAssert( tdpMemcpy(results, results_d, sz, tdpMemcpyDeviceToHost ) );
+    tdpAssert( tdpFree(results_d) );
   }
 
   /* Divide by the actual fluid volume. The reduction is to rank 0 in
    * pe_mpi_comm() for output. */
 
-  pe_mpi_comm(lb->pe, &comm);
-  MPI_Reduce(glocal, gtotal, 4, MPI_DOUBLE, MPI_SUM, 0, comm);
-
-  for (int n = 0; n < 3; n++) {
-    gtotal[n] /= gtotal[3];
+  {
+    double resend[4] = {0};
+    MPI_Comm comm = MPI_COMM_NULL;
+    pe_mpi_comm(lb->pe, &comm);
+    for (int ib = 0; ib < 4; ib++) {
+      resend[ib] = results[ib];
+    }
+    MPI_Reduce(resend, results, 4, MPI_DOUBLE, MPI_SUM, 0, comm);
   }
+
+  /* Account for volume and print results */
+
+  results[X] /= results[3];
+  results[Y] /= results[3];
+  results[Z] /= results[3];
 
   pe_info(lb->pe, "\n");
   pe_info(lb->pe, "Isothermal fluctuations\n");
-  pe_info(lb->pe, "[eqipart.] %14.7e %14.7e %14.7e\n", gtotal[X], gtotal[Y],
-	  gtotal[Z]);
+  pe_info(lb->pe, "[eqipart.] %14.7e %14.7e %14.7e\n", results[X], results[Y],
+	  results[Z]);
 
   kt *= NDIM;
   pe_info(lb->pe, "[measd/kT] %14.7e %14.7e\n",
-	  gtotal[X] + gtotal[Y] + gtotal[Z], kt);
+	  results[X] + results[Y] + results[Z], kt);
 
   return 0;
 }

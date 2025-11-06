@@ -8,7 +8,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2017-2023 The University of Edinburgh
+ *  (c) 2017-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -38,10 +38,15 @@ int colloids_q_boundary(fe_lc_param_t * param,
 __host__ int blue_phase_fs(fe_lc_param_t * feparam, const double dn[3],
 			   double qs[3][3], char status, double * fs);
 
-static int fe_lc_bulk_grad(fe_lc_t * fe, cs_t * cs, map_t * map, double * fbg);
+__host__ __device__ int blue_phase_fbg(fe_lc_param_t * feparam,
+				       double q[3][3],
+				       double dq[3][3][3], double * fbg);
 
-__host__ int blue_phase_fbg(fe_lc_param_t * feparam, double q[3][3], 
-			   double dq[3][3][3], double * fbg);
+int fe_lc_stats_fluid_total(fe_lc_t * fe, map_t * map, double sum[2]);
+__global__ void fe_lc_stats_fluid_total_kernel(kernel_3d_t k3d, fe_lc_t * fe,
+					       map_t * map, double * sum);
+
+int fe_lc_stats_bulk_grad(fe_lc_t * fe, map_t * map, double sum[2]);
 
 
 #define NFE_STAT 5
@@ -56,16 +61,10 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
 		     wall_t * wall, map_t * map,
 		     colloids_info_t * cinfo, int step) {
 
-  int ic, jc, kc, index;
-  int nlocal[3];
-  int status;
-  int ncolloid;
-
-  double fed;
-  double fe_local[NFE_STAT];
-  double fe_total[NFE_STAT];
-
-  MPI_Comm comm;
+  int ncolloid = 0;
+  double fe_local[NFE_STAT] = {0};
+  double fe_total[NFE_STAT] = {0};
+  MPI_Comm comm = MPI_COMM_NULL;
 
   assert(pe);
   assert(cs);
@@ -73,7 +72,6 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
   assert(map);
 
   pe_mpi_comm(pe, &comm);
-  cs_nlocal(cs, nlocal);
   colloids_info_ntotal(cinfo, &ncolloid);
 
   fe_local[0] = 0.0; /* Total free energy (fluid all sites) */
@@ -82,23 +80,9 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
   fe_local[3] = 0.0; /* surface free energy */
   fe_local[4] = 0.0; /* other wall free energy (walls only) */
 
-  for (ic = 1; ic <= nlocal[X]; ic++) {
-    for (jc = 1; jc <= nlocal[Y]; jc++) {
-      for (kc = 1; kc <= nlocal[Z]; kc++) {
-
-	index = cs_index(cs, ic, jc, kc);
-	map_status(map, index, &status);
-
-	fe_lc_fed(fe, index, &fed);
-	fe_local[0] += fed;
-
-	if (status == MAP_FLUID) {
-	    fe_local[1] += fed;
-	    fe_local[2] += 1.0;
-	}
-      }
-    }
-  }
+  /* Update the time dependent electric field etc. and compute fluid total */
+  fe_lc_param_commit(fe);
+  fe_lc_stats_fluid_total(fe, map, fe_local + 1);
 
   /* I M P O R T A N T */
   /* The regression test output is sensitive to the form of
@@ -106,6 +90,10 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
    * all the test logs when satisfied on correctness. */
 
   if (wall_present(wall)) {
+
+    /* Pending device implementation... */
+    field_memcpy(fe->q, tdpMemcpyDeviceToHost);
+    field_grad_memcpy(fe->dq, tdpMemcpyDeviceToHost);
 
     fe_lc_wall(cs, wall, fe, fe_local + 3);
 
@@ -117,6 +105,10 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
 	    fe_total[3], fe_total[4], fe->param->redshift);
   }
   else if (ncolloid > 0) {
+
+    /* Pending device implementation... */
+    field_memcpy(fe->q, tdpMemcpyDeviceToHost);
+    field_grad_memcpy(fe->dq, tdpMemcpyDeviceToHost);
 
     fe_lc_colloid(fe, cs, cinfo, map, fe_local + 3);
 
@@ -138,7 +130,7 @@ int fe_lc_stats_info(pe_t * pe, cs_t * cs, fe_lc_t * fe,
   }
   else {
 
-    fe_lc_bulk_grad(fe, cs, map, fe_local + 3);
+    fe_lc_stats_bulk_grad(fe, map, fe_local + 3);
 
     MPI_Reduce(fe_local, fe_total, NFE_STAT, MPI_DOUBLE, MPI_SUM, 0, comm);
 
@@ -660,54 +652,209 @@ __host__ int blue_phase_fs(fe_lc_param_t * feparam, const double dn[3],
 
 /*****************************************************************************
  *
- *  fe_lc_bulk_grad
+ *  fe_lc_stats_fluid_total
+ *
+ *  The components are: fe total, fluid volume
  *
  *****************************************************************************/
 
-static int fe_lc_bulk_grad(fe_lc_t * fe,  cs_t * cs, map_t * map, double * fbg) {
+int fe_lc_stats_fluid_total(fe_lc_t * fe, map_t * map, double sum[2]) {
 
-  int ic, jc, kc, index;
-  int nlocal[3];
-  int status;
-
-  double febg[2];
-  double q[3][3];
-  double h[3][3];
-  double dq[3][3][3];
-  double dsq[3][3];
+  const int nsz = 2*sizeof(double);
+  int nlocal[3] = {0};
+  double * dsum = NULL;
 
   assert(fe);
-  assert(cs);
   assert(map);
-  assert(fbg);
 
-  cs_nlocal(cs, nlocal);
+  cs_nlocal(map->cs, nlocal);
 
-  fbg[0] = 0.0;
-  fbg[1] = 0.0;
+  tdpAssert( tdpMalloc((void ** ) &dsum, nsz) );
+  tdpAssert( tdpMemcpy(dsum, sum, nsz, tdpMemcpyHostToDevice) );
 
-  for (ic = 1; ic <= nlocal[X]; ic++) {
-    for (jc = 1; jc <= nlocal[Y]; jc++) {
-      for (kc = 1; kc <= nlocal[Z]; kc++) {
+  {
+    /* Kernel */
+    dim3 nblk = {};
+    dim3 ntpb = {};
+    cs_limits_t lim = {1, nlocal[X], 1, nlocal[Y], 1, nlocal[Z]};
+    kernel_3d_t k3d = kernel_3d(map->cs, lim);
 
-        index = cs_index(cs, ic, jc, kc);
-	map_status(map, index, &status);
-	if (status != MAP_FLUID) continue;
+    kernel_3d_launch_param(k3d.kiterations, &nblk, &ntpb);
+    tdpLaunchKernel(fe_lc_stats_fluid_total_kernel, nblk, ntpb, 0, 0,
+                    k3d, fe->target, map->target, dsum);
 
-	field_tensor(fe->q, index, q);
-	field_grad_tensor_grad(fe->dq, index, dq);
-	field_grad_tensor_delsq(fe->dq, index, dsq);
-	fe_lc_compute_h(fe, fe->param->gamma, q, dq, dsq, h);
+    tdpAssert( tdpPeekAtLastError() );
+    tdpAssert( tdpStreamSynchronize(0) );
+  }
 
-	blue_phase_fbg(fe->param, q, dq, febg);
-	fbg[0] += febg[0];
-	fbg[1] += febg[1];
-	
-      }
+  tdpAssert( tdpMemcpy(sum, dsum, nsz, tdpMemcpyDeviceToHost) );
+  tdpAssert( tdpFree(dsum) );
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ *  fe_lc_stats_fluid_total_kernel
+ *
+ *****************************************************************************/
+
+__global__ void fe_lc_stats_fluid_total_kernel(kernel_3d_t k3d, fe_lc_t * fe,
+					       map_t * map, double * sum) {
+  int kindex = 0;
+  int tid = threadIdx.x;
+
+  __shared__ double tfed[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tvol[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+
+  tfed[TARGET_PAD*tid] = 0.0;
+  tvol[TARGET_PAD*tid] = 0.0;
+
+  for_simt_parallel(kindex, k3d.kiterations, 1) {
+
+    int ic = kernel_3d_ic(&k3d, kindex);
+    int jc = kernel_3d_jc(&k3d, kindex);
+    int kc = kernel_3d_kc(&k3d, kindex);
+    int index  = kernel_3d_cs_index(&k3d, ic, jc, kc);
+    int status = MAP_BOUNDARY;
+
+    map_status(map, index, &status);
+
+    if (status == MAP_FLUID) {
+      double fed = 0.0;
+
+      fe_lc_fed(fe, index, &fed);
+
+      tfed[TARGET_PAD*tid] += fed;
+      tvol[TARGET_PAD*tid] += 1.0;
     }
   }
 
+  __syncthreads();
+
+  if (tid == 0) {
+    /* Accumulate block totals */
+    double bfed = 0.0;
+    double bvol = 0.0;
+
+    for (int it = 0; it < blockDim.x; it++) {
+      bfed += tfed[TARGET_PAD*it];
+      bvol += tvol[TARGET_PAD*it];
+    }
+
+    tdpAtomicAddDouble(sum + 0, bfed);
+    tdpAtomicAddDouble(sum + 1, bvol);
+  }
+
+  return;
+}
+
+/*****************************************************************************
+ *
+ *  fe_lc_stats_bulk_grad
+ *
+ *****************************************************************************/
+
+__global__ void fe_lc_stats_bulk_grad_kernel(kernel_3d_t k3d, fe_lc_t * fe,
+					     map_t * map, double * sum);
+
+int fe_lc_stats_bulk_grad(fe_lc_t * fe,  map_t * map, double sum[2]) {
+
+  const int nsz = 2*sizeof(double);
+  int nlocal[3] = {0};
+  double * dsum = NULL;
+
+  assert(fe);
+  assert(map);
+
+  cs_nlocal(map->cs, nlocal);
+
+  tdpAssert( tdpMalloc((void ** ) &dsum, nsz) );
+  tdpAssert( tdpMemcpy(dsum, sum, nsz, tdpMemcpyHostToDevice) );
+
+  {
+    /* Kernel */
+    dim3 nblk = {};
+    dim3 ntpb = {};
+    cs_limits_t lim = {1, nlocal[X], 1, nlocal[Y], 1, nlocal[Z]};
+    kernel_3d_t k3d = kernel_3d(map->cs, lim);
+
+    kernel_3d_launch_param(k3d.kiterations, &nblk, &ntpb);
+    tdpLaunchKernel(fe_lc_stats_bulk_grad_kernel, nblk, ntpb, 0, 0,
+                    k3d, fe->target, map->target, dsum);
+
+    tdpAssert( tdpPeekAtLastError() );
+    tdpAssert( tdpStreamSynchronize(0) );
+  }
+
+  tdpAssert( tdpMemcpy(sum, dsum, nsz, tdpMemcpyDeviceToHost) );
+  tdpAssert( tdpFree(dsum) );
+
   return 0;
+}
+
+/*****************************************************************************
+ *
+ *  fe_lc_stats_bulk_grad_kernel
+ *
+ *****************************************************************************/
+
+__global__ void fe_lc_stats_bulk_grad_kernel(kernel_3d_t k3d, fe_lc_t * fe,
+					     map_t * map, double * sum) {
+  int kindex = 0;
+  int tid = threadIdx.x;
+
+  __shared__ double tbulk[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tgrad[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+
+  tbulk[TARGET_PAD*tid] = 0.0;
+  tgrad[TARGET_PAD*tid] = 0.0;
+
+  for_simt_parallel(kindex, k3d.kiterations, 1) {
+
+    int ic = kernel_3d_ic(&k3d, kindex);
+    int jc = kernel_3d_jc(&k3d, kindex);
+    int kc = kernel_3d_kc(&k3d, kindex);
+    int index  = kernel_3d_cs_index(&k3d, ic, jc, kc);
+    int status = MAP_BOUNDARY;
+
+    map_status(map, index, &status);
+
+    if (status == MAP_FLUID) {
+      double fecontrib[2] = {0};
+      double q[3][3];
+      double h[3][3];
+      double dq[3][3][3];
+      double dsq[3][3];
+
+      field_tensor(fe->q, index, q);
+      field_grad_tensor_grad(fe->dq, index, dq);
+      field_grad_tensor_delsq(fe->dq, index, dsq);
+      fe_lc_compute_h(fe, fe->param->gamma, q, dq, dsq, h);
+
+      blue_phase_fbg(fe->param, q, dq, fecontrib);
+      tbulk[TARGET_PAD*tid] += fecontrib[0];
+      tgrad[TARGET_PAD*tid] += fecontrib[1];
+    }
+  }
+
+  __syncthreads();
+
+  if (tid == 0) {
+    /* Accumulate block totals */
+    double bbulk = 0.0;
+    double bgrad = 0.0;
+
+    for (int it = 0; it < blockDim.x; it++) {
+      bbulk += tbulk[TARGET_PAD*it];
+      bgrad += tgrad[TARGET_PAD*it];
+    }
+
+    tdpAtomicAddDouble(sum + 0, bbulk);
+    tdpAtomicAddDouble(sum + 1, bgrad);
+  }
+
+  return;
 }
 
 /*****************************************************************************
@@ -718,8 +865,8 @@ static int fe_lc_bulk_grad(fe_lc_t * fe,  cs_t * cs, map_t * map, double * fbg) 
  *
  *****************************************************************************/
 
-__host__ int blue_phase_fbg(fe_lc_param_t * feparam, double q[3][3],
-                           double dq[3][3][3], double * febg) {
+__host__ __device__ int blue_phase_fbg(fe_lc_param_t * feparam, double q[3][3],
+				       double dq[3][3][3], double * febg) {
 
   int ia, ib, ic, id;
   double q0, redshift, rredshift, a0, gamma, kappa0, kappa1;
@@ -805,4 +952,3 @@ __host__ int blue_phase_fbg(fe_lc_param_t * feparam, double q[3][3],
 
   return 0;
 }
-

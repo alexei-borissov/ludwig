@@ -1400,17 +1400,25 @@ __host__ __device__ int fe_lc_amplitude_compute(const fe_lc_param_t * param,
  *
  *  and the magnitude of order is then (2/3) gamma.
  *
+ *  We are not going to demand that n[3] is a unit vector. We normalise
+ *  here is a way which avoids any sqrt(). This can be useful, as the
+ *      3 n_a n_b - d_ab
+ *  can generate a round off: e.g., n = {1, 1, 1} immediately introduces
+ *  1.0/sqrt(3.0). Rounds offs can affect the test results, so avoid.
+ *
  *****************************************************************************/
 
 __host__ __device__
 int fe_lc_q_uniaxial(fe_lc_param_t * param, const double n[3], double q[3][3]) {
 
-  int ia, ib;
+  double sq = n[X]*n[X] + n[Y]*n[Y] + n[Z]*n[Z];
+  double a0 = 0.5*param->amplitude0;
+
   KRONECKER_DELTA_CHAR(d);
 
-  for (ia = 0; ia < 3; ia++) {
-    for (ib = 0; ib < 3; ib++) {
-      q[ia][ib] = 0.5*param->amplitude0*(3.0*n[ia]*n[ib] - d[ia][ib]);
+  for (int ia = 0; ia < 3; ia++) {
+    for (int ib = 0; ib < 3; ib++) {
+      q[ia][ib] = a0*(1.0/sq)*(3.0*n[ia]*n[ib] - sq*d[ia][ib]);
     }
   }
 

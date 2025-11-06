@@ -6,7 +6,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2022 The University of Edinburgh
+ *  (c) 2022-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -258,7 +258,7 @@ int test_lc_anchoring_fixed_ct(void) {
 
 int test_lc_anchoring_normal_q0(void) {
 
-  double nhat[3] = {1.0, 2.0, 3.0};
+  double nhat[3] = {0.3, 0.4, 0.5};
   double a0 = 2.4;
   double q0[3][3] = {0};
 

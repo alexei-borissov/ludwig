@@ -17,6 +17,20 @@
 
 #include "io_info_args.h"
 
+/* Optionss for statistics .. */
+
+typedef enum lb_stat_density_enum {
+  LB_STAT_DENSITY_DEFAULT = 0,
+  LB_STAT_DENSITY_FLOAT
+} lb_stat_density_enum_t;
+
+typedef enum lb_stat_mementum_enum {
+  LB_STAT_MOMENTUM_DEFAULT = 0,
+  LB_STAT_MOMENTUM_FLOAT
+} lb_stat_momentum_enum_t;
+
+/* Collision relaxation scheme ... */
+
 typedef enum lb_relaxation_enum {LB_RELAXATION_M10,
                                  LB_RELAXATION_BGK,
 				 LB_RELAXATION_TRT}
@@ -39,6 +53,9 @@ struct lb_data_options_s {
   int usefirsttouch;
 
   io_info_args_t iodata;
+
+  lb_stat_density_enum_t  istatdensity;   /* Method for statistics on rho */
+  lb_stat_momentum_enum_t istatmomentum;  /* Method for statistics on rho u */
 };
 
 lb_data_options_t lb_data_options_default(void);

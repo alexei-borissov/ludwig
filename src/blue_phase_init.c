@@ -828,21 +828,17 @@ int blue_phase_twist_init(cs_t * cs, fe_lc_param_t * param, field_t * fq,
  *
  *  Initialise a uniform uniaxial nematic.
  *
- *  The inputs are the amplitude A and the vector n_a (which we explicitly
- *  convert to a unit vector here).
+ *  The inputs are the amplitude A and the vector n_a (doesn't need to
+ *  be a unit vector).
  *
  *****************************************************************************/
 
 int blue_phase_nematic_init(cs_t * cs, fe_lc_param_t * param, field_t * fq,
 			    const double n[3]) {
 
-  int ic, jc, kc;
-  int nlocal[3];
-  int noffset[3];
-  int ia, index;
-
-  double nhat[3];
-  double q[3][3];
+  int nlocal[3]  = {0};
+  int noffset[3] = {0};
+  double q[3][3] = {0};
 
   assert(cs);
   assert(fq);
@@ -852,18 +848,16 @@ int blue_phase_nematic_init(cs_t * cs, fe_lc_param_t * param, field_t * fq,
   cs_nlocal(cs, nlocal);
   cs_nlocal_offset(cs, noffset);
 
-  for (ia = 0; ia < 3; ia++) {
-    nhat[ia] = n[ia] / modulus(n);
-  }
+  /* Note the director does not need to be a unit vector */
+  fe_lc_q_uniaxial(param, n, q);
 
-  fe_lc_q_uniaxial(param, nhat, q);
+  for (int ic = 1; ic <= nlocal[X]; ic++) {
+    for (int jc = 1; jc <= nlocal[Y]; jc++) {
+      for (int kc = 1; kc <= nlocal[Z]; kc++) {
 
-  for (ic = 1; ic <= nlocal[X]; ic++) {
-    for (jc = 1; jc <= nlocal[Y]; jc++) {
-      for (kc = 1; kc <= nlocal[Z]; kc++) {
-
-	index = cs_index(cs, ic, jc, kc);
+	int index = cs_index(cs, ic, jc, kc);
 	field_tensor_set(fq, index, q);
+
       }
     }
   }

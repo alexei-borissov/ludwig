@@ -249,10 +249,12 @@ int test_lees_edw_buffer_duy(pe_t * pe, cs_t * cs) {
 
     for (int p = 0; p < lees_edw_nplane_local(le); p++) {
       for (int nh = 0; nh < nhalo; nh++) {
+	if (lees_edw_buffer_duy(le, ib) != -1) ifail = -1;
 	assert(lees_edw_buffer_duy(le, ib) == -1);
 	ib++;
       }
       for (int nh = 0; nh < nhalo; nh++) {
+	if (lees_edw_buffer_duy(le, ib) != +1) ifail = +1;
 	assert(lees_edw_buffer_duy(le, ib) == +1);
 	ib++;
       }

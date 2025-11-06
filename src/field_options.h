@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2022 The University of Edinburgh
+ *  (c) 2022-2025 The University of Edinburgh
  *
  *  Contrbuting authors:
  *  Kevin Stratford
@@ -23,6 +23,11 @@ typedef enum field_halo_enum {FIELD_HALO_HOST,
                               FIELD_HALO_TARGET,
 			      FIELD_HALO_OPENMP} field_halo_enum_t;
 
+typedef enum field_stats_enum {
+  FIELD_STAT_DEFAULT = 0,
+  FIELD_STAT_FLOAT
+} field_stats_enum_t;
+
 typedef struct field_options_s field_options_t;
 
 struct field_options_s {
@@ -30,6 +35,7 @@ struct field_options_s {
   int nhcomm;                           /* Actual halo width required */
 
   field_halo_enum_t haloscheme;         /* Halo swap method */
+  field_stats_enum_t istat;             /* Statistics method */
   int haloverbose;                      /* Halo information level */
   int usefirsttouch;                    /* First touch for data? */
 

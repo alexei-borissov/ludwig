@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2018-2024 The University of Edinburgh
+ *  (c) 2018-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Alan Gray (Late of this parish)
@@ -99,7 +99,7 @@ __host__ tdpError_t tdpThreadModelInfo(FILE * fp) {
 
 __host__ void tdp_x86_prelaunch(dim3 nblocks, dim3 nthreads) {
 
-  gridDim = nblocks;
+  gridDim  = nblocks;
   blockDim = nthreads;
 
   /* sanity checks on user settings here... */
@@ -115,7 +115,6 @@ __host__ void tdp_x86_prelaunch(dim3 nblocks, dim3 nthreads) {
   blockIdx.y = 0;
   blockIdx.z = 0;
 
-  /* Check blockDim, blockIdx ? */
   threadIdx.x = omp_get_thread_num();
   threadIdx.y = 0;
   threadIdx.z = 0;

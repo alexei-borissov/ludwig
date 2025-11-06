@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2022 The University of Edinburgh
+ *  (c) 2022-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford
@@ -29,6 +29,7 @@ field_options_t field_options_default(void) {
   field_options_t opts = {.ndata  = 1,
                           .nhcomm = 0,
                           .haloscheme = FIELD_HALO_TARGET,
+			  .istat      = FIELD_STAT_DEFAULT,
 			  .haloverbose = 0,
 			  .usefirsttouch = 0,
                           .iodata = io_info_args_default()};

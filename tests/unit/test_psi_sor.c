@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2012-2024 The University of Edinburgh
+ *  (c) 2012-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -494,7 +494,8 @@ static int test_charge1_exact(psi_t * obj, var_epsilon_ft fepsilon) {
   }
 
   /* Total rho should be unchanged at zero. */
-  assert(fabs(rhotot) < tolerance);
+  if (fabs(rhotot) > tolerance) ifail = -1;
+  assert(ifail == 0);
 
   free(b);
   free(a);

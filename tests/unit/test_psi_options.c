@@ -38,7 +38,8 @@ int test_psi_options_suite(void) {
   pe_create(MPI_COMM_WORLD, PE_QUIET, &pe);
 
   /* A change in components requires a test update... */
-  assert(sizeof(psi_options_t) == 392);
+
+  assert(sizeof(psi_options_t) == 400);
   assert(PSI_NKMAX >= 2);
 
   test_psi_options_default();

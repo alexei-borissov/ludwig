@@ -192,6 +192,9 @@ int io_replace_values(field_t * field, map_t * map, int map_id, double value);
 int io_replace_field_values(field_t * field, map_t * map, int status,
 			    double value);
 
+int field_options_from_rt(rt_t * rt, rt_enum_t lv, int nfield, int nhalo,
+			  field_options_t * options);
+
 /*****************************************************************************
  *
  *  ludwig_rt
@@ -983,11 +986,10 @@ void ludwig_run(const char * inputfile) {
 
       if (ludwig->hydro) {
 	wall_is_pm(ludwig->wall, &is_pm);
-	hydro_memcpy(ludwig->hydro, tdpMemcpyDeviceToHost);
 	stats_velocity_minmax(&statvel, ludwig->hydro, ludwig->map);
       }
 
-      lb_collision_stats_kt(ludwig->lb, ludwig->map);
+      lb_collision_kt_stats(ludwig->lb, ludwig->map);
 
       pe_info(ludwig->pe, "\nCompleted cycle %d\n", step);
     }
@@ -1612,15 +1614,9 @@ int free_energy_init_rt(ludwig_t * ludwig) {
     lees_edw_info(le);
 
     {
-      field_options_t opts = field_options_ndata_nhalo(nf, nhalo);
+      field_options_t opts = {0};
+      field_options_from_rt(rt, RT_FATAL, nf, nhalo, &opts);
 
-      if (rt_switch(rt, "field_halo_openmp")) {
-	opts.haloscheme = FIELD_HALO_OPENMP;
-	opts.haloverbose = rt_switch(rt, "field_halo_verbose");
-      }
-      if (rt_switch(rt, "field_data_use_first_touch")) {
-	opts.usefirsttouch = 1;
-      }
       io_info_args_rt(rt, RT_FATAL, "q", IO_INFO_READ_WRITE, &opts.iodata);
 
       field_create(pe, cs, le, "q", &opts, &ludwig->q);
@@ -1732,15 +1728,9 @@ int free_energy_init_rt(ludwig_t * ludwig) {
     lees_edw_info(le);
 
     {
-      field_options_t opts = field_options_ndata_nhalo(nf, nhalo);
+      field_options_t opts = {0};
+      field_options_from_rt(rt, RT_FATAL, nf, nhalo, &opts);
 
-      if (rt_switch(rt, "field_halo_openmp")) {
-	opts.haloscheme = FIELD_HALO_OPENMP;
-	opts.haloverbose = rt_switch(rt, "field_halo_verbose");
-      }
-      if (rt_switch(rt, "field_data_use_first_touch")) {
-	opts.usefirsttouch = 1;
-      }
       io_info_args_rt(rt, RT_FATAL, "phi", IO_INFO_READ_WRITE, &opts.iodata);
 
       field_create(pe, cs, le, "phi", &opts, &ludwig->phi);
@@ -1767,15 +1757,9 @@ int free_energy_init_rt(ludwig_t * ludwig) {
     ngrad = 2;   /* (\nabla^2) required */
 
     {
-      field_options_t opts = field_options_ndata_nhalo(NQAB, nhalo);
+      field_options_t opts = {0};
+      field_options_from_rt(rt, RT_FATAL, NQAB, nhalo, &opts);
 
-      if (rt_switch(rt, "field_halo_openmp")) {
-	opts.haloscheme = FIELD_HALO_OPENMP;
-	opts.haloverbose = rt_switch(rt, "field_halo_verbose");
-      }
-      if (rt_switch(rt, "field_data_use_first_touch")) {
-	opts.usefirsttouch = 1;
-      }
       io_info_args_rt(rt, RT_FATAL, "q", IO_INFO_READ_WRITE, &opts.iodata);
       field_create(pe, cs, le, "q", &opts, &ludwig->q);
       field_grad_create(pe, ludwig->q, ngrad, &ludwig->q_grad);
@@ -2394,6 +2378,7 @@ int ludwig_report_statistics(ludwig_t * ludwig, int itimestep) {
   assert(ludwig);
 
   if (itimestep == 0) {
+    /* We need the gradients to get the free energy */
     if (ludwig->phi) {
       field_halo(ludwig->phi);
       field_grad_compute(ludwig->phi_grad);
@@ -2408,7 +2393,6 @@ int ludwig_report_statistics(ludwig_t * ludwig, int itimestep) {
     }
   }
 
-  lb_memcpy(ludwig->lb, tdpMemcpyDeviceToHost);
   stats_distribution_print(ludwig->lb, ludwig->map);
 
   if (ludwig->phi) {
@@ -2439,8 +2423,6 @@ int ludwig_report_statistics(ludwig_t * ludwig, int itimestep) {
   }
 
   if (ludwig->q) {
-    field_memcpy(ludwig->q, tdpMemcpyDeviceToHost);
-    field_grad_memcpy(ludwig->q_grad, tdpMemcpyDeviceToHost);
     stats_field_info(ludwig->q, ludwig->map);
     stats_colloid_force_split_output(ludwig->collinfo, itimestep);
   }
@@ -2476,3 +2458,62 @@ int ludwig_report_statistics(ludwig_t * ludwig, int itimestep) {
 
   return 0;
 }
+
+/*****************************************************************************
+ *
+ *  field_options_from_rt
+ *
+ *  Provide a field_options_t initialisation from the run time input.
+ *
+ *  A slightly generalised version of this should be relocated to
+ *  field_options.c This may consider how nfield, nhalo are
+ *  identified from the input. It should also consider rt errors.
+ *
+ *****************************************************************************/
+
+int field_options_from_rt(rt_t * rt, rt_enum_t lv, int nfield, int nhalo,
+			  field_options_t * options) {
+  int ifail = 0;
+
+  field_options_t opts = field_options_ndata_nhalo(nfield, nhalo);
+
+  if (rt_switch(rt, "field_halo_verbose")) {
+    opts.haloverbose = 1;
+  }
+  if (rt_switch(rt, "field_data_use_first_touch")) {
+    opts.usefirsttouch = 1;
+  }
+
+  /* Set up the field statistics report options */
+
+  {
+    /* Use the simple floating point scheme as default for GPU */
+    int ndevice = 0;
+    tdpAssert( tdpGetDeviceCount(&ndevice) );
+    if (ndevice > 0) opts.istat = FIELD_STAT_FLOAT;
+  }
+
+  /* General */
+  {
+    char stype[BUFSIZ] = {0};
+    int havest = rt_string_parameter(rt, "field_options_stat", stype, BUFSIZ);
+
+    if (havest) {
+      if (strcmp(stype, "float") == 0) {
+        opts.istat = FIELD_STAT_FLOAT;
+      }
+      else if (strcmp(stype, "default") == 0) {
+        opts.istat = FIELD_STAT_DEFAULT;
+      }
+      else {
+	ifail = -1;
+	rt_fatal(rt, lv, "Key field_options_stat not recognied %s\n", stype);
+      }
+    }
+  }
+
+  *options = opts;
+
+  return ifail;
+}
+  

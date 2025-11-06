@@ -5,7 +5,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2024 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *    Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -26,7 +26,7 @@
 
 int lb_collide(lb_t * lb, hydro_t * hydro, map_t * map,
 			noise_t * noise, fe_t * fe, visc_t * visc);
-int lb_collision_stats_kt(lb_t * lb, map_t * map);
+int lb_collision_kt_stats(const lb_t * lb, const map_t * map);
 int lb_collision_relaxation_set(lb_t * lb, lb_relaxation_enum_t nrelax);
 
 int lb_collision_ghost_modes_on(lb_t * lb);

@@ -18,7 +18,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2008-2023 The University of Edinburgh
+ *  (c) 2008-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -44,6 +44,7 @@ struct sum_s {
   double  vol;              /* Volume is the same in all cases */
 };
 
+int field_stats_info_klein(field_t * field, map_t * map, const char ** labels);
 int stats_field_q_reduce(field_t * field, map_t * map, int nxx, sum_t * sum,
 			 int rank, MPI_Comm comm);
 
@@ -56,6 +57,12 @@ int stats_field_local(field_t * obj, map_t * map, double * fmin, double * fmax,
 
 __global__ void stats_field_q_kernel(kernel_3d_t k3d, field_t * q,
 				     map_t * map, int nxx, sum_t * sum);
+
+int field_stats_info_float(field_t * field, map_t * map, const char ** labels);
+int field_stats_float(field_t * field, map_t * map, int n, double * sum);
+__global__ void field_stats_float_kernel(kernel_3d_t k3d, field_t * field,
+					 map_t * map, int n, double * sum);
+
 
 /*****************************************************************************
  *
@@ -90,8 +97,6 @@ __host__ __device__ static inline sum_t sum_zero() {
 
 int stats_field_info(field_t * field, map_t * map) {
 
-  MPI_Comm comm = MPI_COMM_NULL;
-
   /* Labelling */
   const char * q1[5] = {"phi", "phi", "phi", "phi", "phi"}; /* default */
   const char * q3[3] = {"Px ", "Py ", "Pz "};
@@ -103,14 +108,40 @@ int stats_field_info(field_t * field, map_t * map) {
 
   switch (field->nf) {
   case 3:
-    q = q3;
+    q = q3; /* vector order parameter P_a */
     break;
   case 5:
-    q = q5;
+    q = q5; /* symmetric, traceless Q_ab */
     break;
   default:
-    q = q1;
+    q = q1; /* scalar (possiblity more than one...) */
   }
+
+  if (field->opts.istat == FIELD_STAT_FLOAT) {
+    field_stats_info_float(field, map, q);
+  }
+  else {
+    /* Default is conpensated sum (conserved order parameters) */
+    field_stats_info_klein(field, map, q);
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ *  field_stats_info_klein
+ *
+ *****************************************************************************/
+
+int field_stats_info_klein(field_t * field, map_t * map,
+			   const char ** labels) {
+
+  MPI_Comm comm = MPI_COMM_NULL;
+
+  assert(field);
+  assert(map);
+  assert(labels);
 
   pe_mpi_comm(field->pe, &comm);
 
@@ -126,7 +157,7 @@ int stats_field_info(field_t * field, map_t * map) {
       double qvar = rvol*sum.qvar  - qbar*qbar;     /* variance */
 
       pe_info(field->pe, "[%3s] %14.7e %14.7e %14.7e %14.7e %14.7e\n",
-	      q[n], qsum, qbar, qvar, sum.qmin, sum.qmax);
+	      labels[n], qsum, qbar, qvar, sum.qmin, sum.qmax);
     }
   }
 
@@ -448,4 +479,177 @@ int stats_field_local(field_t * obj, map_t * map, double * fmin, double * fmax,
   }
 
   return 0;
+}
+
+/*****************************************************************************
+ *
+ *  field_stats_info_float
+ *
+ *  A simple floating point sum.
+ *
+ *****************************************************************************/
+
+int field_stats_info_float(field_t * field, map_t * map,
+			   const char ** labels) {
+
+  MPI_Comm comm = MPI_COMM_NULL;
+
+  assert(field);
+  assert(map);
+  assert(labels);
+
+  pe_mpi_comm(field->pe, &comm);
+
+  for (int n = 0; n < field->nf; n++) {
+
+    double sum[5] = {0.0, 0.0, 0.0, +DBL_MAX, -DBL_MAX};
+    field_stats_float(field, map, n, sum);
+
+    {
+      double qsum = sum[1];
+      double rvol = 1.0/sum[0];
+      double qbar = rvol*qsum;                   /* mean */
+      double qvar = rvol*sum[2] - qbar*qbar;     /* variance */
+
+      pe_info(field->pe, "[%3s] %14.7e %14.7e %14.7e %14.7e %14.7e\n",
+	      labels[n], qsum, qbar, qvar, sum[3], sum[4]);
+    }
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ * field_stats_float
+ *
+ *****************************************************************************/
+
+int field_stats_float(field_t * field, map_t * map, int n, double * sum) {
+
+  const int nsz = 5*sizeof(double);
+  int nlocal[3] = {0};
+  double sum_local[5] = {0};
+  double * dsum = NULL;
+
+  assert(field);
+  assert(map);
+
+  cs_nlocal(field->cs, nlocal);
+
+  /* Copy initial values; then the kernel... */
+  tdpAssert( tdpMalloc((void **) &dsum, nsz) );
+  tdpAssert( tdpMemcpy(dsum, sum, nsz, tdpMemcpyHostToDevice) );
+
+  {
+    dim3 nblk = {};
+    dim3 ntpb = {};
+    cs_limits_t lim = {1, nlocal[X], 1, nlocal[Y], 1, nlocal[Z]};
+    kernel_3d_t k3d = kernel_3d(field->cs, lim);
+
+    kernel_3d_launch_param(k3d.kiterations, &nblk, &ntpb);
+
+    tdpLaunchKernel(field_stats_float_kernel, nblk, ntpb, 0, 0, k3d,
+		    field->target, map->target, n, dsum);
+
+    tdpAssert( tdpPeekAtLastError() );
+    tdpAssert( tdpDeviceSynchronize() );
+  }
+
+  tdpAssert( tdpMemcpy(sum_local, dsum, nsz, tdpMemcpyDeviceToHost) );
+  tdpAssert( tdpFree(dsum) );
+
+  {
+    MPI_Comm comm = MPI_COMM_NULL;
+    pe_mpi_comm(field->pe, &comm);
+
+    MPI_Reduce(sum_local + 0, sum + 0, 3, MPI_DOUBLE, MPI_SUM, 0, comm);
+    MPI_Reduce(sum_local + 3, sum + 3, 1, MPI_DOUBLE, MPI_MIN, 0, comm);
+    MPI_Reduce(sum_local + 4, sum + 4, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ *  field_stats_float_kernel
+ *
+ *  Simple floating point sum
+ *
+ *****************************************************************************/
+
+__global__ void field_stats_float_kernel(kernel_3d_t k3d, field_t * field,
+					 map_t * map, int n, double * sum) {
+  int kindex = 0;
+  int tid = threadIdx.x;
+
+  __shared__ double tvol[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tsum[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tvar[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tmin[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+  __shared__ double tmax[TARGET_PAD*TARGET_MAX_THREADS_PER_BLOCK];
+
+  assert(field);
+  assert(map);
+
+  tvol[TARGET_PAD*tid] = 0.0;
+  tsum[TARGET_PAD*tid] = 0.0;
+  tvar[TARGET_PAD*tid] = 0.0;
+  tmin[TARGET_PAD*tid] = +DBL_MAX;
+  tmax[TARGET_PAD*tid] = -DBL_MAX;
+
+  for_simt_parallel(kindex, k3d.kiterations, 1) {
+
+    int ic = kernel_3d_ic(&k3d, kindex);
+    int jc = kernel_3d_jc(&k3d, kindex);
+    int kc = kernel_3d_kc(&k3d, kindex);
+    int index = kernel_3d_cs_index(&k3d, ic, jc, kc);
+    int status = MAP_BOUNDARY;
+
+    map_status(map, index, &status);
+
+    if (status == MAP_FLUID) {
+      double q0[NQAB] = {0};
+      field_scalar_array(field, index, q0);
+
+      tvol[TARGET_PAD*tid] += 1.0;
+      tsum[TARGET_PAD*tid] += q0[n];
+      tvar[TARGET_PAD*tid] += q0[n]*q0[n];
+      tmin[TARGET_PAD*tid]  = double_min(tmin[TARGET_PAD*tid], q0[n]);
+      tmax[TARGET_PAD*tid]  = double_max(tmax[TARGET_PAD*tid], q0[n]);
+    }
+  }
+
+  __syncthreads();
+
+  if (tid == 0) {
+
+    /* Accumulate each total for this block */
+
+    double bvol = 0.0;
+    double bsum = 0.0;
+    double bvar = 0.0;
+    double bmin = +DBL_MAX;
+    double bmax = -DBL_MAX;
+
+    for (int it = 0; it < blockDim.x; it++) {
+      bvol += tvol[TARGET_PAD*it];
+      bsum += tsum[TARGET_PAD*it];
+      bvar += tvar[TARGET_PAD*it];
+      bmin  = double_min(tmin[TARGET_PAD*it], bmin);
+      bmax  = double_max(tmax[TARGET_PAD*it], bmax);
+    }
+
+    /* Accumulate to final result */
+
+    tdpAtomicAddDouble(sum + 0, bvol);
+    tdpAtomicAddDouble(sum + 1, bsum);
+    tdpAtomicAddDouble(sum + 2, bvar);
+
+    tdpAtomicMinDouble(sum + 3, bmin);
+    tdpAtomicMaxDouble(sum + 4, bmax);
+  }
+
+  return;
 }

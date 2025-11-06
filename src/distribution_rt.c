@@ -240,6 +240,49 @@ int lb_run_time_prev(pe_t * pe, cs_t * cs, rt_t * rt, lb_t ** lb) {
 
   pe_info(pe, "I/O grid:         %d %d %d\n", io_grid[X], io_grid[Y], io_grid[Z]);
 
+  /* Statistcs options */
+  /* Default is automatically updated if GPU; but can adjust */
+  {
+    int ndevice = 0;
+    tdpAssert( tdpGetDeviceCount(&ndevice) );
+    if (ndevice > 0) options.istatdensity = LB_STAT_DENSITY_FLOAT;
+  }
+  /* density */
+  {
+    char stype[BUFSIZ] = {0};
+    int havestat = rt_string_parameter(rt, "lb_data_stat_rho", stype, BUFSIZ);
+
+    if (havestat) {
+      if (strcmp(stype, "float") == 0) {
+	options.istatdensity = LB_STAT_DENSITY_FLOAT;
+      }
+      else if (strcmp(stype, "default") == 0) {
+	options.istatdensity = LB_STAT_DENSITY_DEFAULT;
+      }
+      else {
+	pe_exit(pe, "lb_data_stat_rho not recognised: %s\n", stype);
+      }
+    }
+  }
+
+  /* momentum */
+  {
+    char stype[BUFSIZ] = {0};
+    int havestat = rt_string_parameter(rt, "lb_data_stat_momentum", stype,
+				       BUFSIZ);
+    if (havestat) {
+      if (strcmp(stype, "float") == 0) {
+	options.istatmomentum = LB_STAT_MOMENTUM_FLOAT;
+      }
+      else if (strcmp(stype, "default") == 0) {
+	options.istatmomentum = LB_STAT_MOMENTUM_DEFAULT;
+      }
+      else {
+	pe_exit(pe, "lb_data_stat_momentum not recognised: %s\n", stype);
+      }
+    }
+  }
+
   /* Initialise */
 
   lb_data_create(pe, cs, &options, lb);

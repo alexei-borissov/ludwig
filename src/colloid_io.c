@@ -223,7 +223,7 @@ int colloid_io_info(colloid_io_t * cio) {
 
 int colloid_io_count_colloids(colloid_io_t * cio, int * ngroup) {
 
-  int nlocal;
+  int nlocal = 0;
 
   assert(cio);
   assert(ngroup);
@@ -594,8 +594,6 @@ static int colloid_io_write_list_ascii(colloid_io_t * cio,
 static int colloid_io_read_list_ascii(colloid_io_t * cio, int ndata,
 				      FILE * fp) {
   int ifail = 0;
-  int nread;
-  int nlocal = 0;
 
   colloid_state_t s;
   colloid_t * p_colloid;
@@ -603,12 +601,11 @@ static int colloid_io_read_list_ascii(colloid_io_t * cio, int ndata,
   assert(cio);
   assert(fp);
 
-  for (nread = 0; nread < ndata; nread++) {
+  for (int nread = 0; nread < ndata; nread++) {
     ifail += colloid_state_read_ascii(&s, fp);
     colloids_info_add_local(cio->info, s.index, s.r, &p_colloid);
     if (p_colloid) {
       p_colloid->s = s;
-      nlocal++;
     }
   }
 

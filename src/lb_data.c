@@ -221,7 +221,7 @@ int lb_data_create(pe_t * pe, cs_t * cs, const lb_data_options_t * options,
       obj->sbuff = (double *) malloc(nxbuff*sizeof(double));
       obj->rbuff = (double *) malloc(nxbuff*sizeof(double));
 
-      tdpGetDeviceCount(&ndevice);
+      tdpAssert( tdpGetDeviceCount(&ndevice) );
 
       if (ndevice > 0) {
 	double * tmp = NULL;
@@ -576,8 +576,8 @@ static int lb_init(lb_t * lb) {
 			 sizeof(lb_collide_param_t *), tdpMemcpyHostToDevice));
 
     cs_target(lb->cs, &cstarget);
-    tdpMemcpy(&lb->target->cs, &cstarget, sizeof(cs_t *),
-	      tdpMemcpyHostToDevice);
+    tdpAssert( tdpMemcpy(&lb->target->cs, &cstarget, sizeof(cs_t *),
+			 tdpMemcpyHostToDevice) );
   
     lb_data_initialise_device_model(lb);
   }
@@ -1266,9 +1266,10 @@ int lb_halo_create(const lb_t * lb, lb_halo_t * h, lb_halo_enum_t scheme) {
 
   /* Device */
 
-  int ndevice;
-  tdpGetDeviceCount(&ndevice);
-  tdpStreamCreate(&h->stream);
+  int ndevice = 0;
+
+  tdpAssert( tdpGetDeviceCount(&ndevice) );
+  tdpAssert( tdpStreamCreate(&h->stream) );
 
   if (ndevice == 0) {
     h->target = h;
@@ -1356,8 +1357,10 @@ int lb_halo_post(lb_t * lb, lb_halo_t * h) {
 
   TIMER_start(TIMER_LB_HALO_PACK);
 
-  int ndevice;
-  tdpGetDeviceCount(&ndevice);
+  int ndevice = 0;
+
+  tdpAssert( tdpGetDeviceCount(&ndevice) );
+
   if (ndevice > 0) {
     if (use_graph_api_) {
       tdpAssert( tdpGraphLaunch(h->gsend.exec, h->stream) );
@@ -1427,6 +1430,8 @@ int lb_halo_post(lb_t * lb, lb_halo_t * h) {
 
 int lb_halo_wait(lb_t * lb, lb_halo_t * h) {
 
+  int ndevice = 0;
+
   assert(lb);
   assert(h);
 
@@ -1438,8 +1443,8 @@ int lb_halo_wait(lb_t * lb, lb_halo_t * h) {
 
   TIMER_start(TIMER_LB_HALO_UNPACK);
 
-  int ndevice;
-  tdpGetDeviceCount(&ndevice);
+  tdpAssert( tdpGetDeviceCount(&ndevice) );
+
   if (ndevice > 0) {
     if (use_graph_api_) {
       tdpAssert( tdpGraphLaunch(h->grecv.exec, h->stream) );
@@ -1486,11 +1491,12 @@ int lb_halo_wait(lb_t * lb, lb_halo_t * h) {
 
 int lb_halo_free(lb_t * lb, lb_halo_t * h) {
 
+  int ndevice = 0;
+
   assert(lb);
   assert(h);
 
-  int ndevice = 0;
-  tdpGetDeviceCount(&ndevice);
+  tdpAssert( tdpGetDeviceCount(&ndevice) );
 
   halo_free_device_model(h);
 
@@ -1500,10 +1506,10 @@ int lb_halo_free(lb_t * lb, lb_halo_t * h) {
     tdpAssert( tdpMemcpy(h->recv_d, h->target->recv, 27*sizeof(double *),
 			 tdpMemcpyDeviceToHost) );
     for (int p = 1; p < h->map.nvel; p++) {
-      tdpFree(h->send_d[p]);
-      tdpFree(h->recv_d[p]);
+      tdpAssert( tdpFree(h->send_d[p]) );
+      tdpAssert( tdpFree(h->recv_d[p]) );
     }
-    tdpFree(h->target);
+    tdpAssert( tdpFree(h->target) );
   }
 
   for (int ireq = 0; ireq < 27; ireq++) {

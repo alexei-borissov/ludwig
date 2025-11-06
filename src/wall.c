@@ -421,7 +421,7 @@ __host__ int wall_init_boundaries(wall_t * wall, wall_init_enum_t init) {
     if (wall->linkp == NULL) pe_fatal(wall->pe,"calloc(wall->linkp) failed\n");
     if (wall->linku == NULL) pe_fatal(wall->pe,"calloc(wall->linku) failed\n");
     if (ndevice > 0) {
-      int tmp;
+      int * tmp = NULL;
       tdpAssert( tdpMalloc((void **) &tmp, wall->nlink*sizeof(int)) );
       tdpAssert( tdpMemcpy(&wall->target->linki, &tmp, sizeof(int *),
 			   tdpMemcpyHostToDevice) );
@@ -499,7 +499,7 @@ __host__ int wall_init_boundaries(wall_t * wall, wall_init_enum_t init) {
 
 __host__ int wall_init_boundaries_slip(wall_t * wall) {
 
-  int ndevice;
+  int ndevice = -1;
 
   assert(wall);
   assert(wall->cs);
@@ -509,13 +509,12 @@ __host__ int wall_init_boundaries_slip(wall_t * wall) {
 
   if (wall->param->slip.active) {
 
-    int nlink;
+    int mlink = imax(1, wall->nlink); /* Avoid zero-sized allocations */
+    assert(mlink > 0);
 
-    nlink = imax(1, wall->nlink); /* Avoid zero-sized allocations */
-    assert(nlink > 0);
-    wall->linkk = (int *) calloc(nlink, sizeof(int));
-    wall->linkq = (int8_t *) calloc(nlink, sizeof(int8_t));
-    wall->links = (int8_t *) calloc(nlink, sizeof(int8_t));
+    wall->linkk = (int *)    calloc(mlink, sizeof(int));
+    wall->linkq = (int8_t *) calloc(mlink, sizeof(int8_t));
+    wall->links = (int8_t *) calloc(mlink, sizeof(int8_t));
     assert(wall->linkk);
     assert(wall->linkq);
     assert(wall->links);
@@ -525,17 +524,17 @@ __host__ int wall_init_boundaries_slip(wall_t * wall) {
 
     /* Allocate device memory */
     if (ndevice > 0) {
-      int tmp;
-      tdpAssert( tdpMalloc((void **) &tmp, nlink*sizeof(int)) );
+      int * tmp = NULL;
+      tdpAssert( tdpMalloc((void **) &tmp, mlink*sizeof(int)) );
       tdpAssert (tdpMemcpy(&wall->target->linkk, &tmp, sizeof(int *),
 			   tdpMemcpyHostToDevice) );
     }
     if (ndevice > 0) {
-      int8_t tmp;
-      tdpAssert( tdpMalloc((void **) &tmp, nlink*sizeof(int8_t)) );
+      int8_t * tmp = NULL;
+      tdpAssert( tdpMalloc((void **) &tmp, mlink*sizeof(int8_t)) );
       tdpAssert( tdpMemcpy(&wall->target->linkq, &tmp, sizeof(int8_t *),
 			   tdpMemcpyHostToDevice) );
-      tdpAssert( tdpMalloc((void **) &tmp, nlink*sizeof(int8_t)) );
+      tdpAssert( tdpMalloc((void **) &tmp, mlink*sizeof(int8_t)) );
       tdpAssert( tdpMemcpy(&wall->target->links, &tmp, sizeof(int8_t *),
 			   tdpMemcpyHostToDevice) );
     }
@@ -549,7 +548,7 @@ __host__ int wall_init_boundaries_slip(wall_t * wall) {
      * or a corner), so we must
      * re-examine the map to find the normal/tangent direction */
 
-    for (int n = 0; n < nlink; n++) {
+    for (int n = 0; n < wall->nlink; n++) {
 
       lb_t * lb = wall->lb;
 
