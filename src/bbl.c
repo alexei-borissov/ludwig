@@ -266,10 +266,10 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   nblk.x = cinfo->colloid_array.n_colloids;
   blockDim = ntpb;
   gridDim.x = nblk.x;
-  //tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
   //bbl_pass1_orig(bbl, lb, cinfo);
-  bbl_pass1(bbl, lb, cinfo);
+  //bbl_pass1(bbl, lb, cinfo);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
 
@@ -1123,7 +1123,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
     // pc = cinfo->colloid_array.colloids[colloid_index];
-    printf("blockIdx.x %d gridDim.x %d max colloids %d\n", blockIdx.x, gridDim.x, cinfo->colloid_array.n_colloids);
+    //printf("blockIdx.x %d gridDim.x %d max colloids %d\n", blockIdx.x, gridDim.x, cinfo->colloid_array.n_colloids);
     pc = cinfo->colloid_array.colloids[blockIdx.x];
 
     if (pc->s.bc == COLLOID_BC_BBL) {
