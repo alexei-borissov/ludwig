@@ -101,6 +101,29 @@ __global__ void test_kernel(int *diagnostic) {
   }
 }
 
+__global__ void test_loop_kernel() {
+  __shared__ int *a[10];
+  __shared__ int *b[10];
+
+  for (int i = 0; i < 10/blockDim.x + 1; i++) {
+    int loop_iter = threadIdx.x + i * blockDim.x;
+    a[loop_iter] = loop_iter;
+  }
+
+  int i;
+  for_simt_parallel(i, 10, 1) {
+    b[i] = i;
+  }
+
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+    for (int i = 0; i < 10; i++) {
+      printf("test kernel %d %d\n", a[i], b[i]);
+    }
+  }
+}
+
 /*****************************************************************************
  *
  *  bbl_create
@@ -267,6 +290,9 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   blockDim = ntpb;
   gridDim.x = nblk.x;
   tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  //nblk.x = 1;
+  //gridDim.x = 1;
+  //tdpLaunchKernel(test_loop_kernel, nblk, ntpb, 0, 0);
 
   //bbl_pass1_orig(bbl, lb, cinfo);
   //bbl_pass1(bbl, lb, cinfo);
@@ -1121,9 +1147,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   /* All colloids, including halo */
 
-  //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
-    // pc = cinfo->colloid_array.colloids[colloid_index];
-    //printf("blockIdx.x %d gridDim.x %d max colloids %d\n", blockIdx.x, gridDim.x, cinfo->colloid_array.n_colloids);
     pc = cinfo->colloid_array.colloids[blockIdx.x];
 
     if (pc->s.bc == COLLOID_BC_BBL) {
@@ -1174,10 +1197,11 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     }
 
     int link_index;
-    for_simt_parallel(link_index, pc->active_links, 1) {
-    //for (int i = 0; i < pc->active_links/blockDim.x; i++) {
-      //link_index = threadIdx.x + i * blockDim.x;
-      //if (link_index < pc->active_links) {
+    //for_simt_parallel(link_index, pc->active_links, 1) {
+    for (int i = 0; i < pc->active_links/blockDim.x + 1; i++) {
+      link_index = tid + i * blockDim.x;
+      assert((pc->active_links/blockDim.x + 1) * blockDim.x + tid >= pc->active_links);
+      if (link_index < pc->active_links) {
       if (pc->link_status[link_index] == LINK_UNUSED) continue;
   
       i = pc->linki[link_index];              /* index site i (outside) */
@@ -1398,7 +1422,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
       zeta[TARGET_PAD * tid][20] += delta*rbxc[Z]*rbxc[Z];
 
-    //}
+      }
     }
     __syncthreads();
 
@@ -1431,23 +1455,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
         tdpAtomicAddDouble(&pc->zeta[i], zeta_total[i]);
       }
     }
-
-    //#pragma omp master 
-    //for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
-    //  assert(!isnan(sump[TARGET_PAD * thread_id]));
-    //  pc->sump += sump[TARGET_PAD * thread_id];
-    //  for (int i = 0; i < 3; i++) {
-    //    assert(!isnan(f0[TARGET_PAD * thread_id][i]));
-    //    assert(!isnan(t0[TARGET_PAD * thread_id][i]));
-    //    pc->f0[i] += f0[TARGET_PAD * thread_id][i];
-    //    pc->t0[i] += t0[TARGET_PAD * thread_id][i];
-    //  }
-    //  for (int i = 0; i < 21; i++) {
-    //    assert(!isnan(zeta[TARGET_PAD * thread_id][i]));
-    //    pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
-    //  }
-    //}
-  //}
   __syncthreads();
   }
 }
