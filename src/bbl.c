@@ -1198,9 +1198,9 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     int link_index;
     //for_simt_parallel(link_index, pc->active_links, 1) {
-    for (int i = 0; i < pc->active_links/blockDim.x + 1; i++) {
-      link_index = tid + i * blockDim.x;
-      assert((pc->active_links/blockDim.x + 1) * blockDim.x + tid >= pc->active_links);
+    for (int k = 0; k < pc->active_links/blockDim.x + 1; k++) {
+      link_index = tid + k * blockDim.x;
+      //assert((pc->active_links/blockDim.x + 1) * blockDim.x + tid >= pc->active_links);
       if (link_index < pc->active_links) {
       if (pc->link_status[link_index] == LINK_UNUSED) continue;
   
