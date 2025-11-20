@@ -1023,7 +1023,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	dm += dm_a;
 
 	/* needed for mass conservation   */
-	sump[TARGET_PAD * tid] += dm_a; // Note: reduction?
+	sump[TARGET_PAD * tid] += dm_a; 
       }
       else {
 	/* Virtual momentum transfer for solid->solid links,
@@ -1046,8 +1046,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
        * self-consistent evaluation of new velocities. */
 
       for (ia = 0; ia < 3; ia++) {
-	f0[TARGET_PAD * tid][ia] += dm*c[ia];       // Note: reduction?
-	t0[TARGET_PAD * tid][ia] += dm*rbxc[ia];    // Note: reduction?
+	f0[TARGET_PAD * tid][ia] += dm*c[ia];
+	t0[TARGET_PAD * tid][ia] += dm*rbxc[ia];
 	/* Corrections when links are missing (close to contact) */
 	c[ia] -= pc->cbar[ia];
 	rbxc[ia] -= pc->rxcbar[ia];
@@ -1055,7 +1055,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
       /* Drag matrix elements */
 
-      zeta[TARGET_PAD * tid][ 0] += delta*c[X]*c[X];      // Note: all of these are reductions?
+      zeta[TARGET_PAD * tid][ 0] += delta*c[X]*c[X];
       zeta[TARGET_PAD * tid][ 1] += delta*c[X]*c[Y];
       zeta[TARGET_PAD * tid][ 2] += delta*c[X]*c[Z];
       zeta[TARGET_PAD * tid][ 3] += delta*c[X]*rbxc[X];
