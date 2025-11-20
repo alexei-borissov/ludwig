@@ -67,6 +67,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 __global__ void bbl_pass1_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2_orig(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
+__global__ void bbl_pass2_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 				   colloids_info_t * cinfo);
 static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
@@ -270,7 +271,8 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   bbl_update_colloids(bbl, wall, cinfo);
 
   //bbl_pass2_orig(bbl, lb, cinfo);
-  bbl_pass2(bbl, lb, cinfo);
+  //bbl_pass2(bbl, lb, cinfo);
+  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
@@ -1344,9 +1346,9 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  for ( ; pc; pc = pc->nextall) {
-  //for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
-  //  pc = cinfo->colloid_array.colloids[colloid_index];
+  //for ( ; pc; pc = pc->nextall) {
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
 
@@ -1464,6 +1466,222 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     //i++; // XXX: This probably shouldn't be here?
   }
 
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ *  bbl_pass2 kernel
+ *
+ *  Implement bounce-back on links having updated the colloid
+ *  velocities via the implicit method.
+ *
+ *  The surface stress is also accumulated here (and it really must
+ *  done between the colloid velcoity update and the actual bbl).
+ *  There's a separate routine to access it below.
+ *
+ *****************************************************************************/
+
+__global__ void bbl_pass2_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
+
+  int i, j, ij, ji;
+  int ia;
+  int ndist;
+
+  double dm;
+  double vdotc;
+  double dms;
+  double df, dg;
+  double fdist;
+  double wxrb[3];
+
+  double dgtm1;
+  double rho0;
+  LB_RCS2_DOUBLE(rcs2);
+
+  physics_t * phys = NULL;
+  colloid_t * pc = NULL;
+
+  assert(bbl);
+  assert(lb);
+  assert(cinfo);
+
+  physics_ref(&phys);
+  physics_rho0(phys, &rho0);
+
+  ndist=lb->ndist;
+
+  /* Account the current phi deficit */
+  bbl->deltag = 0.0;
+
+  /* Zero the surface stress */
+
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++) {
+      bbl->stress[i][j] = 0.0;
+    }
+  }
+
+  /* All colloids, including halo */
+
+  colloids_info_all_head(cinfo, &pc);
+
+  pc = cinfo->colloid_array.colloids[blockIdx.x];
+
+    if (pc->s.bc == COLLOID_BC_BBL) {
+
+    /* Set correction for phi arising from previous step */
+
+    dgtm1 = pc->s.deltaphi;
+    if (threadIdx.x == 0) {
+      pc->s.deltaphi = 0.0;
+    }
+
+    /* Correction to the bounce-back for this particle if it is
+     * without full complement of links */
+
+    dms = 0.0;
+
+    for (ia = 0; ia < 3; ia++) {
+      dms += pc->s.v[ia]*pc->cbar[ia];
+      dms += pc->s.w[ia]*pc->rxcbar[ia];
+    }
+
+    dms = 2.0*rcs2*rho0*dms;
+
+	  __shared__ double pc_s_deltaphi[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK];
+    __shared__ double bbl_stress[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][3][3];
+    pc_s_deltaphi[TARGET_PAD * threadIdx.x] = 0.0;
+    for (int ix = 0; ix < 3; ix++) {
+      for (ia = 0; ia < 3; ia++) {
+        bbl_stress[TARGET_PAD * threadIdx.x][ia][ix] = 0.0;
+      }
+    }
+
+    for (int k = 0; k < pc->active_links/blockDim.x + 1; k++) {
+      int link_index = threadIdx.x + k * blockDim.x;
+      if (link_index >= pc->active_links) continue;
+
+      i = pc->linki[link_index];              /* index site i (outside) */
+      j = pc->linkj[link_index];              /* index site j (inside) */
+      ij = pc->linkp[link_index];             /* link velocity index i->j */
+      ji = lb->model.nvel - ij;   /* link velocity index j->i */
+
+      if (pc->link_status[link_index] == LINK_FLUID) {
+
+	lb_f(lb, i, ij, 0, &fdist);
+	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+
+	/* Compute the self-consistent boundary velocity,
+	 * and add the correction term for changes in shape. */
+
+	cross_product(pc->s.w, pc->linkrb[link_index], wxrb);
+
+	vdotc = 0.0;
+	for (ia = 0; ia < 3; ia++) {
+	  vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
+	}
+	vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
+	df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
+
+	/* Contribution to mass conservation from squirmer */
+
+	df += lb->model.wv[ij]*pc->sump;
+
+	/* Correction owing to missing links "squeeze term" */
+
+	df -= lb->model.wv[ij]*dms;
+
+	/* The outside site actually undergoes BBL. */
+
+	lb_f(lb, i, ij, LB_RHO, &fdist);
+	fdist = fdist - df;
+	lb_f_set(lb, j, ji, LB_RHO, fdist);
+
+	/* This is slightly clunky. If the order parameter is
+	 * via LB, bounce back with correction. */
+
+	if (ndist > 1) {
+	  lb_0th_moment(lb, i, LB_PHI, &dg);
+	  dg *= vdotc;
+	  pc_s_deltaphi[TARGET_PAD * threadIdx.x] += dg;
+	  dg -= lb->model.wv[ij]*dgtm1;
+
+	  lb_f(lb, i, ij, LB_PHI, &fdist);
+	  fdist = fdist - dg;
+	  lb_f_set(lb, j, ji, LB_PHI, fdist); // XXX: Hope that there are no write conflicts here?
+	}
+
+	/* The stress is r_b f_b */
+	for (ia = 0; ia < 3; ia++) {
+    bbl_stress[TARGET_PAD * threadIdx.x][ia][X] += pc->linkrb[link_index][X]*(dm - df)*lb->model.cv[ij][ia]; 
+    bbl_stress[TARGET_PAD * threadIdx.x][ia][Y] += pc->linkrb[link_index][Y]*(dm - df)*lb->model.cv[ij][ia];
+    bbl_stress[TARGET_PAD * threadIdx.x][ia][Z] += pc->linkrb[link_index][Z]*(dm - df)*lb->model.cv[ij][ia];
+	}
+      }
+      else if (pc->link_status[link_index] == LINK_COLLOID) {
+
+	/* The stress should include the solid->solid term */
+
+	lb_f(lb, i, ij, 0, &fdist);
+	dm = fdist;
+	lb_f(lb, j, ji, 0, &fdist);
+	dm += fdist;
+
+	for (ia = 0; ia < 3; ia++) {
+	  bbl_stress[TARGET_PAD * threadIdx.x][ia][X] += pc->linkrb[link_index][X]*dm*lb->model.cv[ij][ia]; 
+	  bbl_stress[TARGET_PAD * threadIdx.x][ia][Y] += pc->linkrb[link_index][Y]*dm*lb->model.cv[ij][ia];
+	  bbl_stress[TARGET_PAD * threadIdx.x][ia][Z] += pc->linkrb[link_index][Z]*dm*lb->model.cv[ij][ia];
+	}
+      }
+      /* Next link */
+    }
+
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      double pc_s_deltaphi_total = 0.0;
+      double bbl_stress_total[3][3];
+      for (int ix = 0; ix < 3; ix++) {
+        for (ia = 0; ia < 3; ia++) {
+          bbl_stress_total[ia][ix] = 0.0;
+        }
+      }
+
+      for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
+        pc_s_deltaphi_total += pc_s_deltaphi[TARGET_PAD * threadIdx.x];
+        for (int ix = 0; ix < 3; ix++) {
+          for (ia = 0; ia < 3; ia++) {
+            bbl_stress_total[ia][ix] += bbl_stress[thread_id][ia][ix];
+          }
+        }
+      }
+
+	  tdpAtomicAddDouble(&pc->s.deltaphi, pc_s_deltaphi_total);
+      for (int ix = 0; ix < 3; ix++) {
+        for (ia = 0; ia < 3; ia++) {
+          tdpAtomicAddDouble(&bbl->stress[ia][ix], bbl_stress_total[ia][ix]);
+        }
+      }
+    }
+    __syncthreads();
+
+    /* Reset factors required for change of shape, etc */
+
+	  if (threadIdx.x == 0) {
+      pc->deltam = 0.0;                 
+      pc->sump = 0.0;
+
+      for (ia = 0; ia < 3; ia++) {
+        pc->f0[ia] = 0.0;
+        pc->t0[ia] = 0.0;
+        pc->fc0[ia] = 0.0;
+        pc->tc0[ia] = 0.0;
+      }
+
+      bbl->deltag += pc->s.deltaphi;
+    }
+  }
 
   return 0;
 }
