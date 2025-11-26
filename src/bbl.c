@@ -818,16 +818,14 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     ele = elc/elabc[0];
     ela = colloid_principal_radius(&pc->s);
 
-    /* Diagnostic record of f0 before additions are made. */
-    /* Really, f0 should not be used for dual purposes... */
+    int tid = threadIdx.x;
+    if (tid == 0) {
+      /* Diagnostic record of f0 before additions are made. */
+      /* Really, f0 should not be used for dual purposes... */
 
       pc->diagnostic.fbuild[X] = pc->f0[X];
       pc->diagnostic.fbuild[Y] = pc->f0[Y];
       pc->diagnostic.fbuild[Z] = pc->f0[Z];
-
-      for (i = 0; i < 21; i++) {
-        pc->zeta[i] = 0.0;
-      }
 
       /* We need to normalise link quantities by the sum of weights
        * over the particle. Note that sumw cannot be zero here during
@@ -840,7 +838,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
       }
       pc->deltam   *= rsumw;
       pc->s.deltaphi *= rsumw;
-
+    }
+    __syncthreads();
 	  
     /* Sum over the links */
     __shared__ double sump[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK];
@@ -848,7 +847,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
     __shared__ double t0[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][3];
     __shared__ double zeta[TARGET_PAD * TARGET_MAX_THREADS_PER_BLOCK][21];
     
-    int tid = threadIdx.x;
     sump[TARGET_PAD * tid] = 0.0;
     for (int i = 0; i < 3; i++) {
       f0[TARGET_PAD * tid][i] = 0.0;
@@ -1094,28 +1092,32 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
       for (int i = 0; i < 21; i++) {
         zeta_total[i] = 0.0;
       }
+      for (i = 0; i < 21; i++) {
+        pc->zeta[i] = 0.0;
+      }
+
 
       for (int thread_id = 0; thread_id < TARGET_MAX_THREADS_PER_BLOCK; thread_id++) {
-        sump_total += sump[TARGET_PAD * thread_id];
+        pc->sump += sump[TARGET_PAD * thread_id];
         for (int i = 0; i < 3; i++) {
-          f0_total[i] += f0[TARGET_PAD * thread_id][i];
-          t0_total[i] += t0[TARGET_PAD * thread_id][i];
+          pc->f0[i] += f0[TARGET_PAD * thread_id][i];
+          pc->t0[i] += t0[TARGET_PAD * thread_id][i];
         }
         for (int i = 0; i < 21; i++) {
-          zeta_total[i] += zeta[TARGET_PAD * thread_id][i];
+          pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
         }
       }
 
-      tdpAtomicAddDouble(&pc->sump, sump_total);
-      for (int i = 0; i < 3; i++) {
-        tdpAtomicAddDouble(&pc->f0[i], f0_total[i]);
-        tdpAtomicAddDouble(&pc->t0[i], t0_total[i]);
-      }
-      for (int i = 0; i < 21; i++) {
-        tdpAtomicAddDouble(&pc->zeta[i], zeta_total[i]);
-      }
+      //tdpAtomicAddDouble(&pc->sump, sump_total);
+      //for (int i = 0; i < 3; i++) {
+      //  tdpAtomicAddDouble(&pc->f0[i], f0_total[i]);
+      //  tdpAtomicAddDouble(&pc->t0[i], t0_total[i]);
+      //}
+      //for (int i = 0; i < 21; i++) {
+      //  tdpAtomicAddDouble(&pc->zeta[i], zeta_total[i]);
+      //}
     }
-  __syncthreads();
+  //__syncthreads();
   }
 }
 
