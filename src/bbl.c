@@ -1107,17 +1107,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
           pc->zeta[i] += zeta[TARGET_PAD * thread_id][i];
         }
       }
-
-      //tdpAtomicAddDouble(&pc->sump, sump_total);
-      //for (int i = 0; i < 3; i++) {
-      //  tdpAtomicAddDouble(&pc->f0[i], f0_total[i]);
-      //  tdpAtomicAddDouble(&pc->t0[i], t0_total[i]);
-      //}
-      //for (int i = 0; i < 21; i++) {
-      //  tdpAtomicAddDouble(&pc->zeta[i], zeta_total[i]);
-      //}
     }
-  //__syncthreads();
   }
 }
 
