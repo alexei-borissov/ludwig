@@ -158,6 +158,7 @@ __host__ int colloids_info_ncell(colloids_info_t * info, int ncell[3]);
 __host__ int colloids_info_nhalo(colloids_info_t * info, int * nhalo);
 __host__ int colloids_info_ntotal(colloids_info_t * info, int * ntotal);
 __host__ int colloids_info_nlocal(colloids_info_t * cinfo, int * nlocal);
+__host__ int colloids_info_nall(colloids_info_t * cinfo, int * nall); 
 __host__ int colloids_info_ntotal_set(colloids_info_t * cinfo);
 __host__ int colloids_info_rebuild_freq(colloids_info_t * cinfo, int * nf);
 __host__ int colloids_info_rebuild_freq_set(colloids_info_t * cinfo, int nf);

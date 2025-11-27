@@ -1674,8 +1674,6 @@ __global__ void bbl_pass2_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo
       bbl->deltag += pc->s.deltaphi;
     }
   }
-
-  return 0;
 }
 
 /*****************************************************************************
