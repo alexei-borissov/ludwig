@@ -158,10 +158,10 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   wall_ss_cut_init(pe, cs, rt, wall, *interact);
 
   /* Copy over colloid linked list to array */
-  int nlocal;
-  colloids_info_nlocal(*pinfo, &nlocal);
-  colloids_array_create(&(*pinfo)->colloid_array, nlocal);
-  set_colloids_array(*pinfo, nlocal);
+  int n_all;
+  colloids_info_nall(*pinfo, &n_all);
+  colloids_array_create(&(*pinfo)->colloid_array, n_all);
+  set_colloids_array(*pinfo, n_all);
 
   colloids_rt_cell_list_checks(pe, cs, model, pinfo, *interact);
   colloids_init_halo_range_check(pe, cs, *pinfo);

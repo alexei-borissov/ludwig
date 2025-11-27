@@ -522,6 +522,39 @@ __host__ int colloids_info_nlocal(colloids_info_t * cinfo, int * nlocal) {
 
 /*****************************************************************************
  *
+ *  colloids_info_nall
+ *
+ *  Return the number of local and halo colloids. As the colloids move about,
+ *  this must be recomputed each time.
+ *
+ ****************************************************************************/
+
+__host__ int colloids_info_nall(colloids_info_t * cinfo, int * nall) {
+
+  int ic, jc, kc;
+  colloid_t * pc = NULL;
+
+  assert(cinfo);
+  assert(nall);
+
+  *nall = 0;
+
+  for (ic = 1; ic <= cinfo->ncell[X]; ic++) {
+    for (jc = 1; jc <= cinfo->ncell[Y]; jc++) {
+      for (kc = 1; kc <= cinfo->ncell[Z]; kc++) {
+
+	colloids_info_cell_list_head(cinfo, ic, jc, kc, &pc);
+	for (; pc; pc = pc->nextall) *nall += 1;
+
+      }
+    }
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
  *  colloids_info_ntotal_set
  *
  *  Set the global number of colloids from the current list.
@@ -545,7 +578,7 @@ __host__ int colloids_info_ntotal_set(colloids_info_t * cinfo) {
 
 /*****************************************************************************
  *
- *  colloids_info_cell_list_head
+ *  Colloids_info_cell_list_head
  *
  *****************************************************************************/
 
