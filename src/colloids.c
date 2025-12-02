@@ -89,7 +89,7 @@ __host__ int colloids_info_create(pe_t * pe, cs_t * cs, const int nvel,
     obj->target = obj;
   }
   else {
-    tdpAssert(tdpMalloc((void**) &(obj->target), sizeof(colloids_info_t)));
+    tdpAssert(tdpMallocManaged((void**) &(obj->target), sizeof(colloids_info_t), tdpMemAttachGlobal));
     tdpAssert(tdpMemset(obj->target, 0, sizeof(colloids_info_t)));
   }
 
