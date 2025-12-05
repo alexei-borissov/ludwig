@@ -1062,7 +1062,7 @@ int colloids_info_local_head(colloids_info_t * cinfo, colloid_t ** pc) {
  *
  *****************************************************************************/
 
-__host__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc) {
+__host__ __device__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc) {
 
   assert(cinfo);
   assert(pc);

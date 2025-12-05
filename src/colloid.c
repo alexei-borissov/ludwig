@@ -367,7 +367,7 @@ int colloid_type_check(colloid_state_t * s) {
  *
  *****************************************************************************/
 
-double colloid_principal_radius(const colloid_state_t * s) {
+__host__ __device__ double colloid_principal_radius(const colloid_state_t * s) {
 
   double amax = -1.0;
 

@@ -19,6 +19,7 @@
 #define LUDWIG_COLLOID_H
 
 #include <stdio.h>
+#include "target.h"
 
 /* Tag to describe I/O format version appearing in files */
 
@@ -140,6 +141,6 @@ int colloid_state_mass(const colloid_state_t * s, double rho0, double * mass);
 int colloid_type_check(colloid_state_t * s);
 int colloid_r_inside(const colloid_state_t * s, const double r[3]);
 
-double colloid_principal_radius(const colloid_state_t * s);
+__host__ __device__ double colloid_principal_radius(const colloid_state_t * s);
 
 #endif

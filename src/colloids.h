@@ -167,7 +167,7 @@ __host__ int colloids_info_map_old(colloids_info_t * info, int index, colloid_t 
 __host__ int colloids_info_cell_index(colloids_info_t * cinfo, int ic, int jc, int kc);
 __host__ int colloids_info_insert_colloid(colloids_info_t * cinfo, colloid_t * coll);
 __host__ int colloids_info_cell_list_clean(colloids_info_t * cinfo);
-__host__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc);
+__host__ __device__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc);
 __host__ int colloids_info_local_head(colloids_info_t * cinfo, colloid_t ** pc);
 __host__ int colloids_info_cell_list_head(colloids_info_t * info,
 				 int ic, int jc, int kc, colloid_t ** pc);
