@@ -24,6 +24,7 @@
 #include "colloids_halo.h"
 #include "colloid_sums.h"
 #include "build.h"
+#include "build_links_arrays.h"
 #include "tests.h"
 #include "util.h"
 #include "util_ellipsoid.h"
@@ -183,7 +184,8 @@ static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
   colloids_info_ntotal_set(cinfo);
   colloids_halo_state(cinfo);
 
-  build_update_map(cs, cinfo, map);
+  //build_update_map(cs, cinfo, map);
+  build_update_map_links_arrays(cs, cinfo, map);
 
   {
     /* All ranks compute total and check */
@@ -240,7 +242,7 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
   colloids_info_ntotal_set(cinfo);
   colloids_halo_state(cinfo);
 
-  build_update_map(cs, cinfo, map);
+  build_update_map_links_arrays(cs, cinfo, map);
 
   {
     /* All ranks compute total and check ... */
@@ -302,8 +304,8 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
   colloids_halo_state(cinfo);
   colloids_info_update_lists(cinfo);
 
-  build_update_map(cs, cinfo, map);
-  build_update_links(cs, cinfo, NULL, map, &lb);
+  build_update_map_links_arrays(cs, cinfo, map);
+  build_update_links_arrays(cs, cinfo, NULL, map, &lb);
 
   {
     /* Count up the number of links. Should be (nvel-1) globally */

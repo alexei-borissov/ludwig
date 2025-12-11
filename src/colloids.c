@@ -1704,6 +1704,10 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
     int i = 0;
     for (; colloid; colloid = colloid->nextall) {
         if (cinfo->colloid_array.colloids) {
+          if (i >= cinfo->colloid_array.max_colloids) {
+            printf("Colloids array overflow: i %d max %d n_colloids %d\n",
+                     i, cinfo->colloid_array.max_colloids, n_colloids);
+          }
           assert(i < cinfo->colloid_array.max_colloids);
           if (i < cinfo->colloid_array.max_colloids) {
             cinfo->colloid_array.colloids[i] = colloid;
