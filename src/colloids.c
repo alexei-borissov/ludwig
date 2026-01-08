@@ -1722,7 +1722,10 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
 void update_colloids_array(colloids_info_t * cinfo) {
   /* Copy over colloids pointers to array*/
   int n_total;
+  //colloids_info_nall(cinfo, &n_total);
   colloids_info_ntotal(cinfo, &n_total);
+  //printf("colloids n_total %d max_colloids %d\n",
+  //       n_total, cinfo->colloid_array.max_colloids);
   if (n_total > cinfo->colloid_array.max_colloids) {
     if (cinfo->colloid_array.max_colloids > 0) {
       colloids_array_resize(&cinfo->colloid_array);

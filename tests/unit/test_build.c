@@ -184,6 +184,12 @@ static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
   colloids_info_ntotal_set(cinfo);
   colloids_halo_state(cinfo);
 
+  int n_all;
+  //colloids_info_nall(cinfo, &n_all);
+  colloids_info_ntotal(cinfo, &n_all);
+  colloids_array_create(&cinfo->colloid_array, n_all);
+  set_colloids_array(cinfo, n_all);
+
   //build_update_map(cs, cinfo, map);
   build_update_map_links_arrays(cs, cinfo, map);
 
@@ -242,6 +248,12 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
   colloids_info_ntotal_set(cinfo);
   colloids_halo_state(cinfo);
 
+  int n_all;
+  //colloids_info_nall(cinfo, &n_all);
+  colloids_info_ntotal(cinfo, &n_all);
+  colloids_array_create(&cinfo->colloid_array, n_all);
+  set_colloids_array(cinfo, n_all);
+
   build_update_map_links_arrays(cs, cinfo, map);
 
   {
@@ -280,14 +292,20 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
   lb_model_t lb = {0};
   colloids_info_t * cinfo = NULL;
 
+  pe_info(pe, "here 0\n");
   colloids_info_create(pe, cs, nvel, ncell, &cinfo);
+  pe_info(pe, "here 1\n");
   colloids_info_map_init(cinfo);
+  pe_info(pe, "here 2\n");
 
   map_create(pe, cs, &opts, &map);
   lb_model_create(nvel, &lb);
+  pe_info(pe, "here 3\n");
 
   {
+    pe_info(pe, "here 3a\n");
     colloid_t * pc = NULL;
+    pe_info(pe, "here 3b\n");
     colloid_state_t s = {
       .index = 1,
       .rebuild = 1,
@@ -296,13 +314,29 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
       .a0 = a0,
       .r = {r0[X], r0[Y], r0[Z]}
     };
+    pe_info(pe, "here 3c\n");
     colloids_info_add_local(cinfo, 1, r0, &pc);
+    pe_info(pe, "here 3d\n");
     if (pc) pc->s = s;
+    pe_info(pe, "here 3e\n");
   }
+  pe_info(pe, "here 4\n");
 
   colloids_info_ntotal_set(cinfo);
+  pe_info(pe, "here 4a\n");
   colloids_halo_state(cinfo);
+  pe_info(pe, "here 4b\n");
+  int n_all, n_total;
+  colloids_info_nall(cinfo, &n_all);
+  colloids_info_ntotal(cinfo, &n_total);
+  pe_info(pe, "here 4c, n_total %d n all %d\n", n_total, n_all);
+  colloids_array_create(&cinfo->colloid_array, n_total);
+  pe_info(pe, "here 4d\n");
+  set_colloids_array(cinfo, n_total);
+  pe_info(pe, "here 5\n");
   colloids_info_update_lists(cinfo);
+  
+  pe_info(pe, "here 6\n");
 
   build_update_map_links_arrays(cs, cinfo, map);
   build_update_links_arrays(cs, cinfo, NULL, map, &lb);
