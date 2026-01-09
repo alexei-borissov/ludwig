@@ -539,12 +539,12 @@ __host__ int colloids_info_nall(colloids_info_t * cinfo, int * nall) {
 
   *nall = 0;
 
-  for (ic = 1; ic <= cinfo->ncell[X]; ic++) {
-    for (jc = 1; jc <= cinfo->ncell[Y]; jc++) {
-      for (kc = 1; kc <= cinfo->ncell[Z]; kc++) {
+  for (ic = 0; ic <= cinfo->ncell[X]+1; ic++) {
+    for (jc = 0; jc <= cinfo->ncell[Y]+1; jc++) {
+      for (kc = 0; kc <= cinfo->ncell[Z]+1; kc++) {
 
 	colloids_info_cell_list_head(cinfo, ic, jc, kc, &pc);
-	for (; pc; pc = pc->nextall) *nall += 1;
+	for (; pc; pc = pc->next) *nall += 1;
 
       }
     }
@@ -1722,10 +1722,7 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
 void update_colloids_array(colloids_info_t * cinfo) {
   /* Copy over colloids pointers to array*/
   int n_total;
-  //colloids_info_nall(cinfo, &n_total);
   colloids_info_ntotal(cinfo, &n_total);
-  //printf("colloids n_total %d max_colloids %d\n",
-  //       n_total, cinfo->colloid_array.max_colloids);
   if (n_total > cinfo->colloid_array.max_colloids) {
     if (cinfo->colloid_array.max_colloids > 0) {
       colloids_array_resize(&cinfo->colloid_array);
