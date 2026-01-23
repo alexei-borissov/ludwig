@@ -465,7 +465,8 @@ __host__ tdpError_t tdpReallocManaged(void ** devptr, size_t oldsize, int factor
 
   void **newptr;
   tdpError_t error = hipMallocManaged(newptr, oldsize * factor, flag);
-  memcpy(newptr, devptr, oldsize);
+  //memcpy(newptr, devptr, oldsize);
+  hipMemcpy(newptr, devptr, oldsize, hipMemcpyDeviceToDevice);
   devptr = newptr;
   return error;
 }

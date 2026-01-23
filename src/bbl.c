@@ -255,8 +255,8 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   kernel_launch_param(1000, &nblk, &ntpb);
   update_colloids_array(cinfo); // XXX: This is apparently necessary to keep from getting max velocities that are too high. Probably needs to go somewhere else though.
   nblk.x = cinfo->colloid_array.n_colloids;
-  blockDim = ntpb;
-  gridDim.x = nblk.x;
+  //blockDim = ntpb;
+  //gridDim.x = nblk.x;
   tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
 
   //bbl_pass1(bbl, lb, cinfo);

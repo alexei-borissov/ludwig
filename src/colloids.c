@@ -1692,9 +1692,9 @@ void colloids_array_free(colloids_arrays_t * colloids_array) {
 
 void colloids_array_resize(colloids_arrays_t * colloids_array) {
     if (colloids_array->max_colloids > 0) {
-      //tdpAssert( tdpReallocManaged((void **) &colloids_array->colloids, colloids_array->max_colloids*sizeof(colloid_t *), 2, tdpMemAttachGlobal) )
+      tdpAssert( tdpReallocManaged((void **) &colloids_array->colloids, colloids_array->max_colloids*sizeof(colloid_t *), 2, tdpMemAttachGlobal) )
       colloids_array->max_colloids *= 2;
-      colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
+      //colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
     }
 }
 
