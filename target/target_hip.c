@@ -463,11 +463,21 @@ __host__ tdpError_t tdpDeviceEnablePeerAccess(int peerDevice,
 __host__ tdpError_t tdpReallocManaged(void ** devptr, size_t oldsize, int factor,
 				     unsigned int flag) {
 
-  void **newptr;
-  tdpError_t error = hipMallocManaged(newptr, oldsize * factor, flag);
+  void *newptr;
+  tdpError_t error = hipMallocManaged(&newptr, oldsize * factor, flag);
+  if (error != tdpSuccess) {
+    return error; // Return if allocation fails
+  }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   //memcpy(newptr, devptr, oldsize);
-  hipMemcpy(newptr, devptr, oldsize, hipMemcpyDeviceToDevice);
-  devptr = newptr;
+  tdpError_t copy_error = tdpMemcpy(newptr, *devptr, oldsize, tdpMemcpyDeviceToDevice);
+  if (copy_error != tdpSuccess) {
+    hipFree(newptr); // Free new memory if copy fails
+    return copy_error;
+  }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
+  tdpFree(*devptr);
+  *devptr = newptr;
   return error;
 }
 

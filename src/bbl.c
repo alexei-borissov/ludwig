@@ -249,7 +249,7 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   bbl_pass0(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
-  lb_memcpy(lb, tdpMemcpyDeviceToHost);
+  //lb_memcpy(lb, tdpMemcpyDeviceToHost);
   dim3 nblk = {};
   dim3 ntpb = {};
   kernel_launch_param(1000, &nblk, &ntpb);
@@ -258,6 +258,7 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   //blockDim = ntpb;
   //gridDim.x = nblk.x;
   tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  tdpAssert(tdpPeekAtLastError());
 
   //bbl_pass1(bbl, lb, cinfo);
 
@@ -273,9 +274,10 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   //bbl_pass2_orig(bbl, lb, cinfo);
   //bbl_pass2(bbl, lb, cinfo);
   tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  tdpAssert(tdpPeekAtLastError());
 
   /* __NVCC__ TODO: remove */
-  lb_memcpy(lb, tdpMemcpyHostToDevice);
+  //lb_memcpy(lb, tdpMemcpyHostToDevice);
 
   return 0;
 }

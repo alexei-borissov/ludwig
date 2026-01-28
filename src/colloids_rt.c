@@ -107,9 +107,13 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   /* Colloid info object always created with ncell = 2;
    * later we check if this is ok and adjust if necesaary/possible. */
 
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
+
   colloids_info_create(pe, cs, model->nvel, ncell, pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   rt_string_parameter(rt, "colloid_init", keyvalue, BUFSIZ);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   if (strcmp(keyvalue, "input_one") == 0) init_one = 1;
   if (strcmp(keyvalue, "input_two") == 0) init_two = 1;
@@ -128,57 +132,83 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   pe_info(pe, "-------------------\n");
 
   colloid_io_run_time(pe, rt, cs, *pinfo, pcio);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   if (init_one) colloids_rt_init_few(pe, rt, *pinfo, 1);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_two) colloids_rt_init_few(pe, rt, *pinfo, 2);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_three) colloids_rt_init_few(pe, rt, *pinfo, 3);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_from_file) colloids_rt_init_from_file(pe, rt, *pinfo, *pcio);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_random) colloids_rt_init_random(pe, cs, rt, wall, *pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* At this point, we know number of colloids */
 
   colloids_info_ntotal_set(*pinfo);
   colloids_info_ntotal(*pinfo, &nc);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   pe_info(pe, "\n");
   pe_info(pe, "Initialised %d colloid%s\n", nc, (nc == 1) ? "" : "s");
 
   interact_create(pe, cs, interact);
   assert(*interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   lubrication_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   pair_ss_cut_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   pair_lj_cut_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   pair_yukawa_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   bond_fene_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   angle_cosine_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   pair_ss_cut_ij_init(pe, cs, rt, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   wall_ss_cut_init(pe, cs, rt, wall, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* Copy over colloid linked list to array */
   int n_all;
   colloids_info_nall(*pinfo, &n_all);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_array_create(&(*pinfo)->colloid_array, n_all);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   set_colloids_array(*pinfo, n_all);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_rt_cell_list_checks(pe, cs, model, pinfo, *interact);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_init_halo_range_check(pe, cs, *pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (nc > 1) interact_range_check(*interact, *pinfo);
 
   /* As the cell list has potentially changed, update I/O reference */
 
   colloid_io_info_set(*pcio, *pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* Transfer any particles in the halo regions, initialise the
    * colloid map and build the particles for the first time. */
 
   colloids_info_map_init(*pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_halo_state(*pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_rt_dynamics(cs, *pinfo, wall, map, model);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_rt_gravity(pe, rt, *pinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* Set the update frequency and report (non-default values) */
 
@@ -194,6 +224,7 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
       pe_info(pe, "Colloid rebuild freq:         %d\n", nfreq);
     }
   }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   pe_info(pe, "\n");
 
@@ -808,6 +839,7 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
   double rcmax, hcmax;  /* Interaction ranges */
   double rmax;          /* Maximum interaction range */
   double wcell[3];      /* Final cell widths */
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   assert(pe);
   assert(cs);
@@ -815,12 +847,16 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
   assert(*pinfo);
 
   colloids_info_ntotal(*pinfo, &nc);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   if (nc == 0) return 0;
 
   cs_nlocal(cs, nlocal);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   cs_nhalo(cs, &nhalo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_info_a0max(*pinfo, &a0max);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* For nhalo = 1, we require an additional + 0.5 to identify BBL;
    * for nhalo > 1, the constraint is on the colloid map in the
@@ -834,6 +870,7 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
   nbest[Y] = (int) floor(1.0*(nlocal[Y]) / (dmax(a0max + nhalo - 0.5, 2.0)));
   nbest[Z] = (int) floor(1.0*(nlocal[Z]) / (dmax(a0max + nhalo - 0.5, 2.0)));
 
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   pe_info(pe, "\n");
   pe_info(pe, "Colloid cell list information\n");
@@ -842,9 +879,13 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
 
   if (nc > 1) {
     /* Interaction case */
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     colloids_info_ahmax(*pinfo, &ahmax);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     interact_rcmax(interact, &rcmax);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     interact_hcmax(interact, &hcmax);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     rmax = dmax(2.0*ahmax + hcmax, rcmax);
     rmax = dmax(rmax, 1.5);                  /* subgrid particles again */
     rmax = dmax(rmax, a0max + nhalo - 0.5);  /* halo, as above */
@@ -856,17 +897,21 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
     pe_info(pe, "Surface-surface interaction: %14.7e\n", hcmax);
     pe_info(pe, "Centre-centre interaction:   %14.7e\n", rcmax);
   }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* If we have 2d disks, then prevent nbest[Z] going to zero... */
   if (model->ndim == 2) nbest[Z] = imax(1, nbest[Z]);
 
   /* Transfer colloids to new cell list if required */
 
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (nbest[X] > 2 || nbest[Y] > 2 || nbest[Z] > 2) {
     colloids_info_recreate(nbest, pinfo);
   }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_info_lcell(*pinfo, wcell);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   pe_info(pe, "Final cell list:              %d %d %d\n",
        nbest[X], nbest[Y], nbest[Z]);
   pe_info(pe, "Final cell lengths:          %14.7e %14.7e %14.7e\n",

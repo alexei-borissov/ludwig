@@ -1143,8 +1143,11 @@ __host__ int colloids_info_position_update(colloids_info_t * cinfo) {
 __host__ int colloids_info_update_lists(colloids_info_t * cinfo) {
 
   colloids_info_list_local_build(cinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_info_list_all_build(cinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   update_colloids_array(cinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   return 0;
 }
@@ -1308,17 +1311,22 @@ __host__ int colloids_info_a0max(colloids_info_t * cinfo, double * a0max) {
   assert(a0max);
 
   cs_cart_comm(cinfo->cs, &comm);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* Make sure lists are up-to-date */
   colloids_info_update_lists(cinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_info_local_head(cinfo, &pc);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   for (; pc; pc = pc->next) {
     double a0 = colloid_principal_radius(&pc->s);
     a0_local = dmax(a0_local, a0);
   }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   MPI_Allreduce(&a0_local, a0max, 1, MPI_DOUBLE, MPI_MAX, comm);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   return 0;
 }
@@ -1693,6 +1701,7 @@ void colloids_array_free(colloids_arrays_t * colloids_array) {
 void colloids_array_resize(colloids_arrays_t * colloids_array) {
     if (colloids_array->max_colloids > 0) {
       tdpAssert( tdpReallocManaged((void **) &colloids_array->colloids, colloids_array->max_colloids*sizeof(colloid_t *), 2, tdpMemAttachGlobal) )
+      tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
       colloids_array->max_colloids *= 2;
       //colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
     }
@@ -1722,15 +1731,20 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
 void update_colloids_array(colloids_info_t * cinfo) {
   /* Copy over colloids pointers to array*/
   int n_total;
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_info_ntotal(cinfo, &n_total);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (n_total > cinfo->colloid_array.max_colloids) {
     if (cinfo->colloid_array.max_colloids > 0) {
       colloids_array_resize(&cinfo->colloid_array);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     } else {
       colloids_array_create(&cinfo->colloid_array, n_total);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     }
   }
   set_colloids_array(cinfo, n_total);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 }
 
 void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo) {

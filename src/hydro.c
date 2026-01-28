@@ -263,11 +263,6 @@ __host__ int hydro_f_zero(hydro_t * obj, const double fzero[NHDIM]) {
 }
 
 
-__global__ void test_kernel() {
-  if (threadIdx.x == 23 && blockIdx.x == 125) {
-    printf("Test kernel reached!\n");
-  }
-}
 /*****************************************************************************
  *
  *  hydro_rho0
@@ -288,11 +283,6 @@ __host__ int hydro_rho0(hydro_t * obj, double rho0) {
 		      tdpMemcpyDeviceToHost));
 
   kernel_launch_param(obj->nsite, &nblk, &ntpb);
-  dim3 test_nblk(2000, 1, 1);
-  dim3 test_ntpb(512, 1, 1);
-  tdpLaunchKernel(test_kernel, nblk, ntpb, 0, 0);
-  tdpAssert(tdpPeekAtLastError());
-  printf("nblk %d %d %d ntpb %d %d %d nsite %d rho0 %f rho %f\n", nblk.x, nblk.y, nblk.z, ntpb.x, ntpb.y, ntpb.z, obj->nsite, rho0, rho[0]);
   tdpLaunchKernel(hydro_rho0_kernel, nblk, ntpb, 0, 0, obj->nsite, rho0, rho);
 
   tdpAssert(tdpPeekAtLastError());
