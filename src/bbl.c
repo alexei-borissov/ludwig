@@ -249,7 +249,7 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   bbl_pass0(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
-  //lb_memcpy(lb, tdpMemcpyDeviceToHost);
+  lb_memcpy(lb, tdpMemcpyDeviceToHost);
   dim3 nblk = {};
   dim3 ntpb = {};
   kernel_launch_param(1000, &nblk, &ntpb);
@@ -257,10 +257,11 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   nblk.x = cinfo->colloid_array.n_colloids;
   //blockDim = ntpb;
   //gridDim.x = nblk.x;
-  tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  //tdpLaunchKernel(bbl_pass1_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
   tdpAssert(tdpPeekAtLastError());
+  tdpAssert(tdpStreamSynchronize(0));
 
-  //bbl_pass1(bbl, lb, cinfo);
+  bbl_pass1(bbl, lb, cinfo);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
 
@@ -273,11 +274,15 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   //bbl_pass2_orig(bbl, lb, cinfo);
   //bbl_pass2(bbl, lb, cinfo);
+  //printf("nblk %d %d %d ntpb %d %d %d n colloids %d max %d\n", nblk.x, nblk.y, nblk.z, ntpb.x, ntpb.y, ntpb.z, cinfo->colloid_array.n_colloids, cinfo->colloid_array.max_colloids);
   tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  tdpAssert(tdpStreamSynchronize(0));
   tdpAssert(tdpPeekAtLastError());
+  printf("finished kernel\n");
+  bbl_pass2(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
-  //lb_memcpy(lb, tdpMemcpyHostToDevice);
+  lb_memcpy(lb, tdpMemcpyHostToDevice);
 
   return 0;
 }
@@ -1500,7 +1505,7 @@ __global__ void bbl_pass2_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo
   assert(bbl);
   assert(lb);
   assert(cinfo);
-
+  
   physics_ref(&phys);
   physics_rho0(phys, &rho0);
 
