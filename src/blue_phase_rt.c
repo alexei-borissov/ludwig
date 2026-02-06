@@ -9,7 +9,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2009-2024 The University of Edinburgh
+ *  (c) 2009-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -283,7 +283,9 @@ __host__ int blue_phase_init_rt(pe_t * pe, rt_t *rt,
 
     w1_wall = 0.0;
     w2_wall = 0.0;
-    strncpy(type_wall, type, BUFSIZ - strnlen(type, BUFSIZ) - 1);
+
+    /* The default type follows "type" ... */
+    memcpy(type_wall, type, BUFSIZ*sizeof(char));
 
     rt_string_parameter(rt, "lc_wall_anchoring", type_wall, FILENAME_MAX);
 

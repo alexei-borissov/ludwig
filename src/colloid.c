@@ -8,7 +8,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2024 The University of Edinburgh
+ *  (c) 2010-2026 The University of Edinburgh
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
@@ -128,9 +128,6 @@ int colloid_state_read_ascii(colloid_state_t * ps, FILE * fp) {
   }
 
   if (nread != NTOT_VAR) ifail = 1;
-
-  /* If assertions are off, we may want to catch this failure elsewhere */
-  assert(ifail == 0);
 
   /* Always set the rebuild flag (even if file has zero) */
 
@@ -270,9 +267,6 @@ int colloid_state_write_ascii(const colloid_state_t * s, FILE * fp) {
 
   /* ... should be NTOT_VAR items of format + 1 characters */
   if (nwrite != NTOT_VAR*25) ifail = 1;
-
-  /* If assertions are off, responsibility passes to caller */
-  assert(ifail == 0);
 
   return ifail;
 }

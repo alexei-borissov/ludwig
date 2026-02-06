@@ -31,6 +31,7 @@
 
 #include "pe.h"
 #include "compiler.h"
+#include "util_string.h"
 
 struct pe_s {
   int unquiet;                       /* Print version information etc */
@@ -425,13 +426,13 @@ __host__ int pe_time(char * str, int bufsiz) {
   int ierr = -1;
 
   assert(str);
-  strncpy(str, strdefault, strnlen(strdefault, bufsiz-1));
+  strncat(str, strdefault, bufsiz - 1);
 
   if (now != (time_t) -1) {
     char buf[BUFSIZ] = {0};
     char * c_time = ctime_r(&now, buf);
     if (c_time != NULL) {
-      strncpy(str, buf, strnlen(buf, bufsiz-1));
+      strncpy(str, buf, util_strnlen(buf, bufsiz - 1));
       ierr = 0;
     }
   }

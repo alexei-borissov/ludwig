@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2013-2024 The University of Edinburgh
+ *  (c) 2013-2026 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -33,11 +33,11 @@ int test_build_update_map(pe_t * pe, cs_t * cs);
 int test_build_update_links(pe_t * pe, cs_t * cs);
 
 static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
-				     const double r0[3]);
+                                     const double r0[3]);
 static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
-				     const double r0[3], const double q[4]);
+                                     const double r0[3], const double q[4]);
 static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
-				       const double r0[3], int nvel);
+                                       const double r0[3], int nvel);
 
 /*****************************************************************************
  *
@@ -83,16 +83,16 @@ int test_build_update_map(pe_t * pe, cs_t * cs) {
   int ifail = 0;
 
   {
-    double a0 = 0.25;
-    double r0[3] = {1.0, 1.0, 1.0};   /* Trivial case volume = 1 unit */
+    double a0    = 0.25;
+    double r0[3] = {1.0, 1.0, 1.0}; /* Trivial case volume = 1 unit */
 
     ifail = test_build_update_map_sph(pe, cs, a0, r0);
     assert(ifail == 0);
   }
 
   {
-    double a0 = 0.87;                 /* A bit more than sqrt(3)/2 ... */
-    double r0[3] = {1.5, 1.5, 1.5};   /* ... so have 8 sites inside */
+    double a0    = 0.87;            /* A bit more than sqrt(3)/2 ... */
+    double r0[3] = {1.5, 1.5, 1.5}; /* ... so have 8 sites inside */
 
     ifail = test_build_update_map_sph(pe, cs, a0, r0);
     assert(ifail == 0);
@@ -130,7 +130,7 @@ int test_build_update_links(pe_t * pe, cs_t * cs) {
   int ifail = 0;
 
   {
-    double a0 = 0.25;
+    double a0    = 0.25;
     double r0[3] = {1.0, 1.0, 1.0};
 
     ifail = test_build_update_links_sph(pe, cs, a0, r0, 15);
@@ -153,29 +153,29 @@ int test_build_update_links(pe_t * pe, cs_t * cs) {
  *****************************************************************************/
 
 static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
-				     const double r0[3]) {
+                                     const double r0[3]) {
 
-  int ifail = 0;
+  int ifail    = 0;
   int ncell[3] = {8, 8, 8};
 
   map_options_t opts = map_options_default();
-  map_t * map = NULL;
-  colloid_t * pc = NULL;
-  colloids_info_t * cinfo = NULL;
+  map_t *       map  = NULL;
+  colloid_t *   pc   = NULL;
+
+  colloid_options_t options = colloid_options_ncell(ncell);
+  colloids_info_t * cinfo   = NULL;
 
   map_create(pe, cs, &opts, &map);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
-  colloids_info_map_init(cinfo);
+  colloids_info_create(pe, cs, &options, &cinfo);
 
   {
-    colloid_state_t s = {
-      .index = 1,
-      .rebuild = 1,
-      .bc = COLLOID_BC_BBL,
-      .shape = COLLOID_SHAPE_SPHERE,
-      .a0 = a0,
-      .r = {r0[X], r0[Y], r0[Z]}
+    colloid_state_t s = {.index   = 1,
+                         .rebuild = 1,
+                         .bc      = COLLOID_BC_BBL,
+                         .shape   = COLLOID_SHAPE_SPHERE,
+                         .a0      = a0,
+                         .r       = {r0[X], r0[Y], r0[Z]}
     };
     colloids_info_add_local(cinfo, 1, r0, &pc);
     if (pc) pc->s = s;
@@ -202,7 +202,7 @@ static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
     if (fabs(avol - 1.0*nvol) > DBL_EPSILON) ifail = -1;
   }
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   map_free(&map);
 
   return ifail;
@@ -217,29 +217,29 @@ static int test_build_update_map_sph(pe_t * pe, cs_t * cs, double a0,
  *****************************************************************************/
 
 static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
-				     const double r0[3], const double q[4]) {
-  int ifail = 0;
+                                     const double r0[3], const double q[4]) {
+  int ifail    = 0;
   int ncell[3] = {8, 8, 8};
 
   map_options_t opts = map_options_default();
-  map_t * map = NULL;
-  colloid_t * pc = NULL;
-  colloids_info_t * cinfo = NULL;
+  map_t *       map  = NULL;
+  colloid_t *   pc   = NULL;
+
+  colloid_options_t options = colloid_options_ncell(ncell);
+  colloids_info_t * cinfo   = NULL;
 
   map_create(pe, cs, &opts, &map);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
-  colloids_info_map_init(cinfo);
+  colloids_info_create(pe, cs, &options, &cinfo);
 
   {
-    colloid_state_t s = {
-      .index = 1,
-      .rebuild = 1,
-      .bc = COLLOID_BC_BBL,
-      .shape = COLLOID_SHAPE_ELLIPSOID,
-      .r = {r0[X], r0[Y], r0[Z]},
-      .elabc = {abc[X], abc[Y], abc[Z]},
-      .quat = {q[0], q[1], q[2], q[3]}
+    colloid_state_t s = {.index   = 1,
+                         .rebuild = 1,
+                         .bc      = COLLOID_BC_BBL,
+                         .shape   = COLLOID_SHAPE_ELLIPSOID,
+                         .r       = {r0[X], r0[Y], r0[Z]},
+                         .elabc   = {abc[X], abc[Y], abc[Z]},
+                         .quat    = {q[0], q[1], q[2], q[3]}
     };
     colloids_info_add_local(cinfo, 1, r0, &pc);
     if (pc) pc->s = s;
@@ -266,7 +266,7 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
     }
   }
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   map_free(&map);
 
   return ifail;
@@ -283,30 +283,31 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
  *****************************************************************************/
 
 static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
-				       const double r0[3], int nvel) {
-  int ifail = 0;
+                                       const double r0[3], int nvel) {
+  int ifail    = 0;
   int ncell[3] = {8, 8, 8};
 
   map_options_t opts = map_options_default();
-  map_t * map = NULL;
-  lb_model_t lb = {0};
-  colloids_info_t * cinfo = NULL;
+  map_t *       map  = NULL;
+  lb_model_t    lb   = {0};
 
-  colloids_info_create(pe, cs, nvel, ncell, &cinfo);
-  colloids_info_map_init(cinfo);
+  colloid_options_t options = colloid_options_ncell(ncell);
+  colloids_info_t * cinfo   = NULL;
+
+  options.nvel = nvel;
+  colloids_info_create(pe, cs, &options, &cinfo);
 
   map_create(pe, cs, &opts, &map);
   lb_model_create(nvel, &lb);
 
   {
-    colloid_t * pc = NULL;
-    colloid_state_t s = {
-      .index = 1,
-      .rebuild = 1,
-      .bc = COLLOID_BC_BBL,
-      .shape = COLLOID_SHAPE_SPHERE,
-      .a0 = a0,
-      .r = {r0[X], r0[Y], r0[Z]}
+    colloid_t *     pc = NULL;
+    colloid_state_t s  = {.index   = 1,
+                          .rebuild = 1,
+                          .bc      = COLLOID_BC_BBL,
+                          .shape   = COLLOID_SHAPE_SPHERE,
+                          .a0      = a0,
+                          .r       = {r0[X], r0[Y], r0[Z]}
     };
     colloids_info_add_local(cinfo, 1, r0, &pc);
     if (pc) pc->s = s;
@@ -326,9 +327,9 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
 
   {
     /* Count up the number of links. Should be (nvel-1) globally */
-    int nlink = 0;
-    MPI_Comm comm = MPI_COMM_NULL;
-    colloid_t * pc = NULL;
+    int         nlink = 0;
+    MPI_Comm    comm  = MPI_COMM_NULL;
+    colloid_t * pc    = NULL;
 
     /* Remember to run through all halo images ... */
     colloids_info_all_head(cinfo, &pc);
@@ -340,12 +341,14 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
     /* All ranks check */
     pe_mpi_comm(pe, &comm);
     MPI_Allreduce(MPI_IN_PLACE, &nlink, 1, MPI_INT, MPI_SUM, comm);
-    if (nlink != (nvel - 1)) ifail = -1;
+    if (nlink != (nvel - 1)) {
+      ifail = -1;
+    }
   }
 
   lb_model_free(&lb);
   map_free(&map);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return ifail;
 }

@@ -1,6 +1,22 @@
 
 ### Changes
 
+version 0.24.0
+
+- There is a major update to colloid i/o. While one should still be
+  able to read exsiting colloid files (single files), the
+  implementation of the file i/o has changed. See
+  https://ludwig.epcc.ed.ac.uk/inputs/colloid.html
+  https://ludwig.epcc.ed.ac.uk/outputs/colloid.html
+  for details.
+
+- Some additional diagnostic options are available, particularly
+  to address performce issue in the GPU code. See
+  https://ludwig.epcc.ed.ac.uk/outputs/diagnostic.html
+
+- Bug fix: https://github.com/ludwig-cf/ludwig/issues/369
+  Thanks to Sumesh Thampi for reporting this.
+
 version 0.23.1
 
 - Bug fix: https://github.com/ludwig-cf/ludwig/issues/360

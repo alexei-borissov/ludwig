@@ -9,7 +9,7 @@
  *
  *  From an idea appearing in LAMMPS.
  *
- *  (c) 2022-2024 The University of Edinburgh
+ *  (c) 2022-2025 The University of Edinburgh
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
@@ -293,6 +293,10 @@ int MPI_Type_create_struct(int count, int * arry_of_blocklens,
 			   MPI_Datatype * newtype);
 int MPI_Type_create_resized(MPI_Datatype oldtype, MPI_Aint ub, MPI_Aint extent,
 			    MPI_Datatype * newtype);
+int MPI_Type_create_indexed_block(int count, int blocklength,
+				  const int * array_of_displacements,
+				  MPI_Datatype oldtype,
+				  MPI_Datatype * newtype);
 int MPI_Type_get_extent(MPI_Datatype handle, MPI_Aint * lb, MPI_Aint *extent);
 int MPI_Type_size(MPI_Datatype handle, int * sz);
 
@@ -320,6 +324,9 @@ int MPI_File_write_all(MPI_File fh, const void * buf, int count,
 int MPI_File_write_all_begin(MPI_File fh, const void * buf, int count,
 			     MPI_Datatype datatype);
 int MPI_File_write_all_end(MPI_File fh, const void * buf, MPI_Status * status);
+
+int MPI_File_write_at(MPI_File fh, MPI_Offset offset, const void * buf,
+		      int count, MPI_Datatype datatype, MPI_Status * status);
 
 #ifdef __cplusplus
 }

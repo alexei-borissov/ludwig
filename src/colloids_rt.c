@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2014-2024 The University of Edinburgh
+ *  (c) 2014-2026 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -38,9 +38,9 @@
 #include "angle_cosine.h"
 #include "wall_ss_cut.h"
 
+#include "colloids_file_io.h"
 #include "colloids_halo.h"
 #include "colloids_init.h"
-#include "colloid_io_rt.h"
 #include "colloids_rt.h"
 
 #include "build.h"
@@ -61,8 +61,7 @@ int colloids_rt_dynamics(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 			 map_t * map, const lb_model_t * model);
 int colloids_rt_gravity(pe_t * pe, rt_t * rt, colloids_info_t * cinfo);
 int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo, int nc);
-int colloids_rt_init_from_file(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
-			       colloid_io_t * cio);
+
 int colloids_rt_init_random(pe_t * pe, cs_t * cs, rt_t * rt, wall_t * wall,
 			    colloids_info_t * cinfo);
 int colloids_rt_state_stub(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
@@ -72,6 +71,8 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
 				 const lb_model_t * model,
 				 colloids_info_t ** pinfo,
 				 interact_t * interact);
+
+int colloids_rt_from_file(rt_t * rt, int nstep, colloids_info_t * info);
 
 /*****************************************************************************
  *
@@ -88,7 +89,6 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
  *****************************************************************************/
 
 int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
-		     colloid_io_t ** pcio,
 		     interact_t ** interact, wall_t * wall, map_t * map,
 		     const lb_model_t * model) {
   int nc;
@@ -97,8 +97,9 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   int init_three = 0;
   int init_from_file = 0;
   int init_random = 0;
-  int ncell[3] = {2, 2, 2};
   char keyvalue[BUFSIZ] = "";
+
+  colloid_options_t options = colloid_options_default();
 
   assert(pe);
   assert(cs);
@@ -106,11 +107,6 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   /* Colloid info object always created with ncell = 2;
    * later we check if this is ok and adjust if necesaary/possible. */
-
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
-
-  colloids_info_create(pe, cs, model->nvel, ncell, pinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   rt_string_parameter(rt, "colloid_init", keyvalue, BUFSIZ);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
@@ -122,28 +118,52 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   if (strcmp(keyvalue, "from_file") == 0) init_from_file = 1;
 
   /* Trap old input files */
-  if (strcmp(keyvalue, "random") == 0) pe_fatal(pe, "check input file: random\n");
+  if (strcmp(keyvalue, "random") == 0) {
+    pe_fatal(pe, "check input file: random\n");
+  }
 
-  if ((init_one + init_two + init_three + init_random + init_from_file) < 1)
-    return 0;
+  if ((init_one + init_two + init_three + init_random + init_from_file) > 0) {
+    options.have_colloids = 1;
+  }
+
+  /* New style i/o */
+  /* i/o options are same for input / output at the moment... */
+
+  colloid_io_options_from_rt(rt, RT_FATAL, &options.input);
+  colloid_io_options_from_rt(rt, RT_FATAL, &options.output);
+  options.input.report = 1;
+  options.output.report = 1;
+
+  /* Set the update frequency for bbl */
+
+  rt_int_parameter(rt, "colloid_rebuild_freq", &options.bbl_build_freq);
+
+  colloids_info_create(pe, cs, &options, pinfo);
+
+  if (options.have_colloids == 0) return 0;
 
   pe_info(pe, "\n");
   pe_info(pe, "Colloid information\n");
   pe_info(pe, "-------------------\n");
+  pe_info(pe, "\n");
 
-  colloid_io_run_time(pe, rt, cs, *pinfo, pcio);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
+  colloid_options_to_vinfo(rt, RT_INFO, &options);
 
   if (init_one) colloids_rt_init_few(pe, rt, *pinfo, 1);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_two) colloids_rt_init_few(pe, rt, *pinfo, 2);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_three) colloids_rt_init_few(pe, rt, *pinfo, 3);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
-  if (init_from_file) colloids_rt_init_from_file(pe, rt, *pinfo, *pcio);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_random) colloids_rt_init_random(pe, cs, rt, wall, *pinfo);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
+
+  if (init_from_file) {
+    int nstep = 0;
+    physics_t * phys = NULL;
+    physics_ref(&phys);
+    nstep = physics_control_timestep(phys);
+    colloids_rt_from_file(rt, nstep, *pinfo);
+  }
 
   /* At this point, we know number of colloids */
 
@@ -192,38 +212,15 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (nc > 1) interact_range_check(*interact, *pinfo);
 
-  /* As the cell list has potentially changed, update I/O reference */
-
-  colloid_io_info_set(*pcio, *pinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
-
   /* Transfer any particles in the halo regions, initialise the
    * colloid map and build the particles for the first time. */
 
-  colloids_info_map_init(*pinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_halo_state(*pinfo);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_rt_dynamics(cs, *pinfo, wall, map, model);
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_rt_gravity(pe, rt, *pinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
-
-  /* Set the update frequency and report (non-default values) */
-
-  {
-    int isfreq = 0;
-    int nfreq = 1;
-
-    isfreq = rt_int_parameter(rt, "colloid_rebuild_freq", &nfreq);
-    if (nfreq <= 0) pe_fatal(pe, "colloids_rebuild_freq must be >= 1\n");
-
-    if (isfreq) {
-      colloids_info_rebuild_freq_set(*pinfo, nfreq);
-      pe_info(pe, "Colloid rebuild freq:         %d\n", nfreq);
-    }
-  }
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   pe_info(pe, "\n");
@@ -327,39 +324,6 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
   if (nc >= 4) {
     pe_fatal(pe, "Cannot specify more than 3 colloids with a file\n");
   }
-
-  return 0;
-}
-
-/*****************************************************************************
- *
- *  colloids_rt_init_from_file
- *
- *****************************************************************************/
-
-int colloids_rt_init_from_file(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
-			       colloid_io_t * cio) {
-
-  int ntstep;
-  char filename[BUFSIZ] = {0};
-  physics_t * phys = NULL;
-
-  assert(pe);
-  assert(rt);
-  assert(cinfo);
-  assert(cio);
-
-  physics_ref(&phys);
-  ntstep = physics_control_timestep(phys);
-
-  if (ntstep == 0) {
-    snprintf(filename, BUFSIZ-1, "config.cds.init");
-  }
-  else {
-    snprintf(filename, BUFSIZ-1, "config.cds%8.8d", ntstep);
-  }
-
-  colloid_io_read(cio, filename);
 
   return 0;
 }
@@ -906,7 +870,11 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
 
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (nbest[X] > 2 || nbest[Y] > 2 || nbest[Z] > 2) {
-    colloids_info_recreate(nbest, pinfo);
+    colloid_options_t options = (*pinfo)->options;
+    options.ncell[X] = nbest[X];
+    options.ncell[Y] = nbest[Y];
+    options.ncell[Z] = nbest[Z];
+    colloids_info_recreate(&options, pinfo);
   }
   tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
@@ -916,7 +884,6 @@ int colloids_rt_cell_list_checks(pe_t * pe, cs_t * cs,
        nbest[X], nbest[Y], nbest[Z]);
   pe_info(pe, "Final cell lengths:          %14.7e %14.7e %14.7e\n",
        wcell[X], wcell[Y], wcell[Z]);
-
 
   return 0;
 }
@@ -1381,4 +1348,38 @@ int wall_ss_cut_init(pe_t * pe, cs_t * cs, rt_t * rt, wall_t * wall,
   }
 
   return 0;
+}
+
+/*****************************************************************************
+ *
+ *  colloids_rt_from_file
+ *
+ *****************************************************************************/
+
+int colloids_rt_from_file(rt_t * rt, int nstep, colloids_info_t * info) {
+
+  int ifail = 0;
+
+  char filename[BUFSIZ]   = {0};
+  colloids_file_io_t fio  = {0};
+
+  if (0 <= nstep && nstep < 1000000000) {
+    snprintf(filename, BUFSIZ-1, "colloids-%9.9d.dat", nstep);
+  }
+  else {
+    rt_fatal(rt, RT_FATAL, "Time step out of range for colloid file name.\n");
+  }
+
+  colloids_file_io_initialise(info, &fio);
+
+  ifail = colloids_file_io_read(&fio, filename);
+
+  colloids_file_io_finalise(&fio);
+
+  /* Report and stop ...*/
+  if (ifail) {
+    rt_fatal(rt, RT_FATAL, "Please check working directory: %s\n", filename);
+  }
+
+  return ifail;
 }

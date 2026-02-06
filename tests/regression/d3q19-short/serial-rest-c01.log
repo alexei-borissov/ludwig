@@ -61,13 +61,29 @@ Hydrodynamics: on
 Colloid information
 -------------------
 
-Colloid I/O settings
---------------------
-Decomposition:                1  1  1
-Number of files:              1
-Input format:                 ascii
-Output format:                ascii
-Single file read flag:        0
+Colloid Options
+---------------
+Cell list:                       2 2 2
+LB link set:                     19
+BBL rebuild freq:                1
+Solid density rho0:              1.0000000e+00
+Max. displacement per dt:        8.0000000e-01
+
+Colloid i/o input options
+-------------------------
+Mode:                            ansi
+Record format:                   ascii
+Report:                          yes
+Number of files:                 1
+
+Colloid i/o output options
+--------------------------
+Mode:                            ansi
+Record format:                   ascii
+Report:                          yes
+Number of files:                 1
+
+Colloid output frequency:        0
 
 Requested one colloid via input:
 colloid_one_a0                2.3000000e+00
@@ -103,8 +119,11 @@ Colloid velocities - x y z
 Writing distribution output at step 20!
 Writing colloid output at step 20!
 
-colloid_io_write:
-writing colloid information to config.cds00000020.001-001 etc
+Wrote colloids to file: colloids-000000020.dat
+Number of colloids:     1
+Time taken (seconds):    0.01
+
+
 Writing rho/velocity output at step 20!
 
 Scalars - total mean variance min max

@@ -20,7 +20,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  * 
- *  (c) 2016-2017 The University of Edinburgh
+ *  (c) 2016-2026 The University of Edinburgh
  *
  *  Contributing authors:
  *  Alan Gray (alang@epcc.ed.ac.uk)
@@ -31,7 +31,6 @@
 #ifndef MEMORY_MODEL_H
 #define MEMORY_MODEL_H
 
-#include <assert.h>
 #include "pe.h"
 
 /* The target SIMD vector length */

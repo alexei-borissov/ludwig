@@ -2,16 +2,22 @@
  *
  *  colloid_state_io.c
  *
- *  Basic colloid state i/o functions of ascii/binary.
+ *  Basic colloid state i/o functions of ascii/binary. The i/o is to
+ *  character buffer.
+ *
+ *
+ *  Edinburgh Soft Matter and Statistical Physics Group and
+ *  Edinburgh Parallel Computing Centre
+ *
+ *  (c) 2025-2026 The University of Edinburgh
+ *
+ *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
  *****************************************************************************/
 
 #include <string.h>
 
 #include "colloid_state_io.h"
-
-/* Override COLLOID_IO_VERSION here: */
-#define IO_VERSION 240
 
 /*****************************************************************************
  *
@@ -52,7 +58,7 @@ int colloid_state_io_write_buf_ascii(const colloid_state_t * s, char * buf) {
     ifail = -1;
   }
   else {
-    const size_t item = 25*sizeof(char); /* Single datum is 25 char ... */
+    const int item        = 25*sizeof(char); /* Single datum is 25 char ... */
     const char * i1format = "%24d\n";
     const char * d3format = "%24.15e ";  /* space */
     const char * d1format = "%24.15e\n"; /* new line */
@@ -82,7 +88,7 @@ int colloid_state_io_write_buf_ascii(const colloid_state_t * s, char * buf) {
     nwrite += snprintf(cbuf + 17*item, 1 + item, i1format, s->isfixedvxyz[2]);
     nwrite += snprintf(cbuf + 18*item, 1 + item, i1format, s->inter_type);
     /* This is the i/o version; we ignore s->ioversion: */
-    nwrite += snprintf(cbuf + 19*item, 1 + item, i1format, IO_VERSION);
+    nwrite += snprintf(cbuf + 19*item, 1 + item, i1format, LUDWIG_COLLOID_IO_VERSION);
     nwrite += snprintf(cbuf + 20*item, 1 + item, i1format, s->bc);
     nwrite += snprintf(cbuf + 21*item, 1 + item, i1format, s->shape);
     nwrite += snprintf(cbuf + 22*item, 1 + item, i1format, s->active);
@@ -194,11 +200,11 @@ int colloid_state_io_read_buf_ascii(colloid_state_t * s, const char * buf) {
     ifail = -1;
   }
   else {
-    /* Make sure there is a \0 before we get to sscanf, hence the memcpy() */
-    int nr = 0;                       /* number of char read */
+    int nr = 0;               /* number of items assigned by ascanf() */
     int sz = 25*sizeof(char);
     char tmp[BUFSIZ] = {0};
 
+    /* Make sure there is a \0 before we get to sscanf, hence the memcpy() */
     memcpy(tmp, buf +  0*sz, sz); nr += sscanf(tmp, "%d", &s->index);
     memcpy(tmp, buf +  1*sz, sz); nr += sscanf(tmp, "%d", &s->rebuild);
     memcpy(tmp, buf +  2*sz, sz); nr += sscanf(tmp, "%d", &s->nbonds);
@@ -233,7 +239,7 @@ int colloid_state_io_read_buf_ascii(colloid_state_t * s, const char * buf) {
     memcpy(tmp, buf + 30*sz, sz); nr += sscanf(tmp, "%d", &s->intpad[5]);
     memcpy(tmp, buf + 31*sz, sz); nr += sscanf(tmp, "%d", &s->intpad[6]);
 
-    if (nr != 32*sz) ifail = -1;
+    if (nr != 32) ifail = -1;
 
     /* Doubles */
     memcpy(tmp, buf + 32*sz, sz); nr += sscanf(tmp, "%le", &s->a0);
@@ -288,7 +294,7 @@ int colloid_state_io_read_buf_ascii(colloid_state_t * s, const char * buf) {
     memcpy(tmp, buf + 78*sz, sz); nr += sscanf(tmp, "%le", &s->dpad[2]);
     memcpy(tmp, buf + 79*sz, sz); nr += sscanf(tmp, "%le", &s->dpad[3]);
 
-    if (nr != NTOT_VAR*sz) ifail = -2;
+    if (nr != NTOT_VAR) ifail = -(1 + nr);
   }
 
   return ifail;

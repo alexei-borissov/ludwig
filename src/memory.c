@@ -23,15 +23,20 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2016-2021 The University of Edinbrugh
+ *  (c) 2016-2026 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
  *****************************************************************************/
 
+#ifdef __cplusplus
+/* Note _POSIX_C_SOURCE may cause problems with C++ (e.g. Apple). Revisit */
+/* E.g., https://github.com/iains/gcc-15-branch/issues/4 */
+#else
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200112L
+#endif
 #endif
 
 #include <assert.h>

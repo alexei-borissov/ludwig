@@ -5,13 +5,13 @@
  *  Produce a file of polymers information suitable for reading into
  *  the main code.
  *
- *  Polymer positions are initialised at random. Multiple polymers can 
+ *  Polymer positions are initialised at random. Multiple polymers can
  *  be generated. This code is suitable for dilute or intermediate polymer
  *  solutions.
- *  It should not be used if the system is dense. Boundary walls can not 
- *  be included. 
+ *  It should not be used if the system is dense. Boundary walls can not
+ *  be included.
  *
- *  A 'grace' distance dh may be specified to prevent the initial monomer 
+ *  A 'grace' distance dh may be specified to prevent the initial monomer
  *  positions being too close together.
  *
  *  For compilation instructions see the Makefile.
@@ -28,8 +28,7 @@
  *  Contributing authors
  *  Kai Qi (kai.qi@epfl.ch)
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
- *  (c) 2012-2023 The University of Edinburgh
- *  (c) 2020- Swiss Federal Institute of Technology Lausanne
+ *  (c) 2012-2026 The University of Edinburgh
  *
  *****************************************************************************/
 
@@ -38,23 +37,23 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "../src/colloid.h"
-#include "../src/pe.h"
-#include "../src/coords.h"
+#include "../src/colloid_io_impl_mpio.h"
 #include "../src/util.h"
 #include "../src/util_fopen.h"
 
-enum format {ASCII, BINARY};
+const char * filename_ = "colloids-000000000.dat"; /* output file name */
 
 void colloid_init_trial(cs_t * cs, int * lcgstate, double r[3], double dh);
-void colloid_init_write_file(const int nc, const colloid_state_t * pc,
-			     const int form);
-void poly_init_random(cs_t * cs, int * lcgstate, int nc,
+void poly_init_random(cs_t * cs, int * lcgstate,
 		      colloid_state_t * state, double dh, int Lpoly,
 		      int Npoly, double lbond);
 
 void grow_one_monomer(cs_t * cs, int * lcgstate, double r1[3], double r2[3],
 		      double dh,double lbond);
+
+int colloid_init_write_file_mpio(pe_t * pe, cs_t * cs, int nc,
+                                 colloid_state_t *       state,
+                                 io_record_format_enum_t ioformat);
 
 /*****************************************************************************
  *
@@ -68,17 +67,17 @@ int main(int argc, char ** argv) {
 
   int ntotal[3] = {18, 18, 18};        /* Total system size (cf. input) */
   int periodic[3] = {1, 1, 1};         /* 0 = wall, 1 = periodic */
-  int file_format = ASCII;
 
   int n;
   int nrequest;
 
+  io_record_format_enum_t iorformat = IO_RECORD_ASCII;
 
   double a0 = 0.178;    /* Input radius */
-  double ah = 0.2;      /* Hydrodynamic radius */ 
+  double ah = 0.2;      /* Hydrodynamic radius */
   double al = 1.58;     /* Offset parameter for subgrid particle */
   double dh = 0.50;     /* "grace' distance */
-  double q0 = 0.0;      /* positive charge */ 
+  double q0 = 0.0;      /* positive charge */
   double q1 = 0.0;      /* negative charge */
   double b1 = 0.00;
   double b2 = 0.00;
@@ -141,10 +140,11 @@ int main(int argc, char ** argv) {
     state[n].rng = 1 + n;
   }
 
-  poly_init_random(cs, &lcg, nrequest, state, dh, Lpoly, Npoly, lbond);
+  poly_init_random(cs, &lcg, state, dh, Lpoly, Npoly, lbond);
 
   /* Write out */
-  colloid_init_write_file(nrequest, state, file_format);
+  colloid_init_write_file_mpio(pe, cs, nrequest, state, iorformat);
+
 
   free(state);
 
@@ -192,7 +192,7 @@ void colloid_init_trial(cs_t * cs, int * lcgstate, double r[3], double dh) {
  *
  * grow_one_monomer
  *
- * Grow a single monomer. 
+ * Grow a single monomer.
  *
  *****************************************************************************/
 
@@ -233,14 +233,14 @@ void grow_one_monomer(cs_t * cs, int * lcgstate, double r1[3], double r2[3],
  * poly_init_random
  *
  * We grow each polymer from a single monomer. Initially, the first monomer is
- * randomly placed in the simulation box. Then, the second monomer is grown on 
- * a sphere with radius equal to the bond length. The first monmoer locates at 
+ * randomly placed in the simulation box. Then, the second monomer is grown on
+ * a sphere with radius equal to the bond length. The first monmoer locates at
  * the center of the sphere. The code will repeat this procedure until a full
- * length polymer is generated.  
+ * length polymer is generated.
  *
  *****************************************************************************/
 
-void poly_init_random(cs_t * cs, int * lcgstate, int nc,
+void poly_init_random(cs_t * cs, int * lcgstate,
 		      colloid_state_t * state, double dh, int Lpoly, int Npoly,
 		      double lbond) {
 
@@ -253,7 +253,7 @@ void poly_init_random(cs_t * cs, int * lcgstate, int nc,
 
 
   for (int pl = 0; pl < Npoly; pl++) {
-    
+
     mon1 = pl*Lpoly;
 
     do {
@@ -316,49 +316,48 @@ void poly_init_random(cs_t * cs, int * lcgstate, int nc,
   }
 
   assert(Nmon==Npoly*Lpoly);
-  
+
 }
 
-/****************************************************************************
+/*****************************************************************************
  *
- *  colloid_init_write_file
+ *  colloid_init_write_file_mpio
  *
- ****************************************************************************/
+ *****************************************************************************/
 
-void colloid_init_write_file(const int nc, const colloid_state_t * pc,
-			     const int form) {
-  int n;
-  const char * filename = "config.cds.init.001-001";
-  FILE * fp;
+int colloid_init_write_file_mpio(pe_t * pe, cs_t * cs, int nc,
+                                 colloid_state_t *       state,
+                                 io_record_format_enum_t ioformat) {
+  int               ifail    = 0;
+  int               ncell[3] = {8, 8, 8};
+  colloid_options_t opts     = colloid_options_ncell(ncell);
+  colloids_info_t   info     = {0};
 
-  fp = util_fopen(filename, "w");
-  if (fp == NULL) {
-    printf("Could not open %s\n", filename);
-    exit(0);
+  opts.output.mode      = COLLOID_IO_MODE_MPIIO;
+  opts.output.iorformat = ioformat;
+
+  colloids_info_initialise(pe, cs, &opts, &info);
+
+  /* Insert the colloids into the cell list ... */
+  for (int ic = 0; ic < nc; ic++) {
+    ifail = colloids_info_add_state_local(&info, state + ic);
+    assert(ifail == 0);
+  }
+  colloids_info_ntotal_set(&info);
+
+  /* Write output to file */
+  {
+    colloid_io_impl_t * io = NULL;
+
+    colloid_io_impl_output(&info, &io);
+    printf("Write to: %s\n", filename_);
+    ifail = io->impl->write(io, filename_);
+    io->impl->free(&io);
   }
 
-  if (form == BINARY) {
-    fwrite(&nc, sizeof(int), 1, fp);
-  }
-  else {
-    fprintf(fp, "%22d\n", nc);
-  }
+  /* Finish */
 
-  for (n = 0; n < nc; n++) {
-    if (form == BINARY) {
-      colloid_state_write_binary(pc+n, fp);
-    }
-    else {
-      colloid_state_write_ascii(pc+n, fp);
-    }
-  }
+  colloids_info_finalise(&info);
 
-  if (ferror(fp)) {
-    perror("perror: ");
-    printf("Error reported on write to %s\n", filename);
-  }
-
-  fclose(fp);
-
-  return;
+  return ifail;
 }

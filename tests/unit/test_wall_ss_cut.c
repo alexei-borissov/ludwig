@@ -7,7 +7,8 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2022-2024 The University of Edinburgh
+ *  (c) 2022-2025 The University of Edinburgh
+ *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
  *****************************************************************************/
@@ -131,8 +132,8 @@ int test_wall_ss_cut_single(pe_t * pe, cs_t * cs, wall_t * wall) {
 
 int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb) {
 
-  int ncell[3] = {2, 2, 2};
-  colloids_info_t * cinfo = NULL;
+  colloid_options_t options = colloid_options_default();
+  colloids_info_t * cinfo   = NULL;
 
   wall_ss_cut_t * wall_ss_cut = NULL;
   wall_ss_cut_options_t opts = {.epsilon = 0.001,
@@ -144,7 +145,7 @@ int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb) {
   assert(cs);
   assert(wall);
 
-  colloids_info_create(pe, cs, lb->nvel, ncell, &cinfo); 
+  colloids_info_create(pe, cs, &options, &cinfo);
   wall_ss_cut_create(pe, cs, wall, &opts, &wall_ss_cut);
 
   {
@@ -172,7 +173,7 @@ int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb) {
   }
 
   wall_ss_cut_free(wall_ss_cut);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }

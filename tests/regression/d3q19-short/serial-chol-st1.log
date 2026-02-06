@@ -91,14 +91,29 @@ Advection scheme order: 2
 
 Colloid information
 -------------------
+Colloid Options
+---------------
+Cell list:                       2 2 2
+LB link set:                     19
+BBL rebuild freq:                1
+Solid density rho0:              1.0000000e+00
+Max. displacement per dt:        8.0000000e-01
 
-Colloid I/O settings
---------------------
-Decomposition:                1  1  1
-Number of files:              1
-Input format:                 ascii
-Output format:                ascii
-Single file read flag:        0
+Colloid i/o input options
+-------------------------
+Mode:                            ansi
+Record format:                   ascii
+Report:                          yes
+Number of files:                 1
+
+Colloid i/o output options
+--------------------------
+Mode:                            ansi
+Record format:                   ascii
+Report:                          yes
+Number of files:                 1
+
+Colloid output frequency:        0
 
 Requested one colloid via input:
 colloid_one_isfixedr          1

@@ -5,7 +5,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2014-2022 The University of Edinburgh
+ *  (c) 2014-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -101,17 +101,17 @@ static int test_pair_ss_cut1(pe_t * pe, cs_t * cs) {
 
 static int test_pair_ss_cut2(pe_t * pe, cs_t * cs) {
 
-  int ncell[3] = {2, 2, 2};
 
+  colloid_options_t opts  = colloid_options_default();
   colloids_info_t * cinfo = NULL;
+
   interact_t * interact = NULL;
   pair_ss_cut_t * pair = NULL;
 
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // Dummy value nvel=27
-  assert(cinfo);
+  colloids_info_create(pe, cs, &opts, &cinfo);
   interact_create(pe, cs, &interact);
   assert(interact);
 
@@ -127,7 +127,7 @@ static int test_pair_ss_cut2(pe_t * pe, cs_t * cs) {
 
   pair_ss_cut_free(pair);
   interact_free(interact);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }
@@ -200,7 +200,7 @@ static int test_pair_config1(colloids_info_t * cinfo, interact_t * interact,
   pair_ss_cut_single(pair, dh, &f, &v);
 
   f = f/sqrt(3.0);
- 
+
   if (pe_mpi_size(cinfo->pe) == 1) {
     assert(fabs(pc1->force[X] - f) < FLT_EPSILON);
     assert(fabs(pc1->force[Y] - f) < FLT_EPSILON);

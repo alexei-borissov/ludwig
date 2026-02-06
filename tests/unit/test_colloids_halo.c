@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2017 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -68,7 +68,6 @@ int test_colloids_halo_suite(void) {
 
 int test_colloids_halo111(pe_t * pe, cs_t * cs) {
 
-  int ncell[3] = {2, 2, 2};
   int ntotal[3];
   int noffset[3];
   int mpi_cartsz[3];
@@ -80,6 +79,9 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   double lmin[3];
 
   colloid_t * pc;
+
+  int ncell[3] = {2, 2, 2};
+  colloid_options_t opts  = colloid_options_ncell(ncell);
   colloids_info_t * cinfo = NULL;
   colloid_halo_t * halo = NULL;
 
@@ -90,7 +92,7 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   cs_ntotal(cs, ntotal);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   colloids_halo_create(cinfo, &halo);
@@ -129,9 +131,6 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 2);
-
   colloids_info_cell_list_head(cinfo, ncell[X] + 1, 1, 1, &pc);
   test_assert(pc != NULL);
 
@@ -161,8 +160,7 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 4);
+  assert(cinfo->nallocated == 4);
 
   colloids_info_cell_list_head(cinfo, 1, ncell[Y] + 1, 1, &pc);
   test_assert(pc != NULL);
@@ -199,11 +197,10 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 8);
+  assert(cinfo->nallocated == 8);
 
   colloids_halo_free(halo);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }
@@ -218,7 +215,6 @@ int test_colloids_halo111(pe_t * pe, cs_t * cs) {
 
 int test_colloids_halo211(pe_t * pe, cs_t * cs) {
 
-  int ncell[3] = {2, 2, 2};
   int ntotal[3];
   int noffset[3];
   int mpi_cartsz[3];
@@ -232,6 +228,9 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
 
   colloid_t * pc = NULL;
   colloid_halo_t * halo = NULL;
+
+  int ncell[3] = {2, 2, 2};
+  colloid_options_t opts  = colloid_options_ncell(ncell);
   colloids_info_t * cinfo = NULL;
 
   assert(pe);
@@ -241,7 +240,7 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
   cs_ntotal(cs, ntotal);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   colloids_halo_create(cinfo, &halo);
@@ -281,8 +280,7 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 2);
+  assert(cinfo->nallocated == 2);
 
   colloids_info_cell_list_head(cinfo, 0, 1, 1, &pc);
   test_assert(pc != NULL);
@@ -310,8 +308,7 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 4);
+  assert(cinfo->nallocated == 4);
 
   colloids_info_cell_list_head(cinfo, 2, ncell[Y] + 1, 1, &pc);
   test_assert(pc != NULL);
@@ -344,11 +341,10 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 1);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 8);
+  assert(cinfo->nallocated == 8);
 
   colloids_halo_free(halo);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }
@@ -363,7 +359,6 @@ int test_colloids_halo211(pe_t * pe, cs_t * cs) {
 
 int test_colloids_halo_repeat(pe_t * pe, cs_t * cs) {
 
-  int ncell[3] = {2, 2, 2};
   int noffset[3];
   int index;
   int ncolloid;
@@ -371,6 +366,8 @@ int test_colloids_halo_repeat(pe_t * pe, cs_t * cs) {
   double lmin[3];
 
   colloid_t * pc = NULL;
+
+  colloid_options_t opts  = colloid_options_default();
   colloids_info_t * cinfo = NULL;
 
   assert(pe);
@@ -378,7 +375,7 @@ int test_colloids_halo_repeat(pe_t * pe, cs_t * cs) {
 
   cs_lmin(cs, lmin);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   cs_nlocal_offset(cs, noffset);
@@ -402,10 +399,9 @@ int test_colloids_halo_repeat(pe_t * pe, cs_t * cs) {
   colloids_info_nlocal(cinfo, &ncolloid);
   test_assert(ncolloid == 3);
 
-  colloids_info_nallocated(cinfo, &ncolloid);
-  test_assert(ncolloid == 24);
+  assert(cinfo->nallocated == 24);
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }

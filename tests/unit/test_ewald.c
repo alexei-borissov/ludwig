@@ -10,7 +10,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2023 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -37,8 +37,6 @@
 
 int test_ewald_suite(void) {
 
-  int ncell[3] = {2, 2, 2};
-
   double mu = 0.285;  /* dipole strength */
   double rc = 32.0;   /* real space cut off (default L / 2) */
   double r1[3];
@@ -54,6 +52,8 @@ int test_ewald_suite(void) {
 
   colloid_t * p_c1;
   colloid_t * p_c2;
+
+  colloid_options_t opts  = colloid_options_default();
   colloids_info_t * cinfo = NULL;
 
   pe_t * pe = NULL;
@@ -76,7 +76,7 @@ int test_ewald_suite(void) {
   test_assert(fabs(ltot[Y] - 64.0) < TEST_DOUBLE_TOLERANCE);
   test_assert(fabs(ltot[Z] - 64.0) < TEST_DOUBLE_TOLERANCE);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   test_assert(cinfo != NULL);
 
   ewald_create(pe, cs, mu, rc, cinfo, &ewald);
@@ -317,7 +317,7 @@ int test_ewald_suite(void) {
 
   pe_info(pe, "PASS     ./unit/test_ewald\n");
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   cs_free(cs);
   pe_free(pe);
 

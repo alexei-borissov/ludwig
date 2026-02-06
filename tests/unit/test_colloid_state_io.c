@@ -42,8 +42,7 @@ int test_colloid_state_io_suite(void) {
   test_colloid_state_io_write_buf();
   test_colloid_state_io_read_buf();
   test_colloid_state_io_write_buf_ascii();
-  test_colloid_state_io_read_buf();
-
+  test_colloid_state_io_read_buf_ascii();
 
   pe_info(pe, "%-9s %s\n", "PASS", __FILE__);
   pe_free(pe);
@@ -121,11 +120,11 @@ int test_colloid_state_io_write_buf_ascii(void) {
 
   {
     colloid_state_t sw = util_test_colloid_state();
-    char buf[1 + COLLOID_BUFSZ] = {0};
+    char buf[1 + LUDWIG_COLLOID_IO_BUFSZ] = {0};
 
     ifail = colloid_state_io_write_buf_ascii(&sw, buf);
     assert(ifail == 0);
-    assert(strlen(buf) == COLLOID_BUFSZ);
+    assert(strlen(buf) == LUDWIG_COLLOID_IO_BUFSZ);
   }
 
   return ifail;
@@ -144,12 +143,13 @@ int test_colloid_state_io_read_buf_ascii(void) {
   {
     colloid_state_t sw = util_test_colloid_state();
     colloid_state_t sr = {};
-    char buf[1 + COLLOID_BUFSZ] = {0};
+    char buf[1 + LUDWIG_COLLOID_IO_BUFSZ] = {0};
     int same = 0;
 
-    ifail = colloid_state_io_write_buf(&sw, buf);
+    sw.ioversion = LUDWIG_COLLOID_IO_VERSION;
+    ifail = colloid_state_io_write_buf_ascii(&sw, buf);
     assert(ifail == 0);
-    ifail = colloid_state_io_read_buf(&sr, buf);
+    ifail = colloid_state_io_read_buf_ascii(&sr, buf);
     assert(ifail == 0);
     same = util_test_colloid_state_same(&sw, &sr);
     if (same == 0) ifail = -1;

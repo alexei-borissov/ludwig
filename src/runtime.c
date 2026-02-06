@@ -8,7 +8,7 @@
  *  The input file is parsed to create a list of key value pairs,
  *  which are stored as strings. The routines here remain completely
  *  agnostic about the meaning of the strings. The key / value pairs
- *  should be space separated, e.g., 
+ *  should be space separated, e.g.,
  *
  *  # The temperature of the fluid is
  *  temperature 0.01
@@ -31,7 +31,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2022 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
@@ -44,6 +44,7 @@
 #include <stdlib.h>
 
 #include "runtime.h"
+#include "util_string.h"
 
 #define NKEY_LENGTH 128           /* Maximum key / value string length */
 #define NKEY_MAX    1024          /* Prevent buffer overflow in keys */
@@ -152,7 +153,7 @@ int rt_read_input_file(rt_t * rt, const char * input_file_name) {
 
   FILE * fp_input;
   int    nline = 0;
-  char   line[NKEY_LENGTH];
+  char   line[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -183,7 +184,7 @@ int rt_read_input_file(rt_t * rt, const char * input_file_name) {
   }
 
   strncpy(rt->input_file, input_file_name,
-	  strnlen(input_file_name, FILENAME_MAX-1));
+	  util_strnlen(input_file_name, FILENAME_MAX-1));
 
   rt_key_broadcast(rt);
 
@@ -302,14 +303,14 @@ static int rt_key_broadcast(rt_t * rt) {
  *
  *  rt_double_parameter
  *
- *  Query the keys for a scalar double matching te given key.
+ *  Query the keys for a scalar double matching the given key.
  *
  *****************************************************************************/
 
 int rt_double_parameter(rt_t * rt, const char * key, double * value) {
 
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -330,7 +331,7 @@ int rt_double_parameter(rt_t * rt, const char * key, double * value) {
 int rt_int_parameter(rt_t * rt, const char * key, int * value) {
 
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -351,7 +352,7 @@ int rt_int_parameter(rt_t * rt, const char * key, int * value) {
 int rt_double_parameter_vector(rt_t * rt, const char * key, double v[3]) {
 
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -378,7 +379,7 @@ int rt_double_parameter_vector(rt_t * rt, const char * key, double v[3]) {
 int rt_int_parameter_vector(rt_t * rt, const char * key, int v[3]) {
 
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -409,7 +410,7 @@ int rt_int_nvector(rt_t * rt, const char * key, int nv, int * v,
 
   int ierr = 0;
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
   assert(v);
@@ -455,8 +456,8 @@ int rt_double_nvector(rt_t * rt, const char * key, int nv, double * v,
 
   int ierr = 0;
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
-  
+  char str_value[NKEY_LENGTH] = {0};
+
   assert(rt);
   assert(v);
 
@@ -499,7 +500,7 @@ int rt_string_parameter(rt_t * rt, const char * key, char * value,
 			unsigned int len) {
 
   int key_present = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -536,7 +537,7 @@ int rt_switch(rt_t * rt, const char * key) {
 
   int key_present = 0;
   int iswitch = 0;
-  char str_value[NKEY_LENGTH];
+  char str_value[NKEY_LENGTH] = {0};
 
   assert(rt);
 
@@ -592,7 +593,7 @@ static int rt_is_valid_token(const char * token) {
   assert(token);
 
   if (rt_line_count_tokens(token) != 1) isvalid = 0;
-  if (strncmp(token, "#", 1)      == 0) isvalid = 0;     
+  if (strncmp(token, "#", 1)      == 0) isvalid = 0;
 
   return isvalid;
 }
@@ -686,7 +687,7 @@ static int rt_line_count_tokens(const char * line) {
  *  Parse a single string as space-separated key value.
  *  A new copy of the key and value are returned.
  *
- *  Returns 0 on sucess.
+ *  Returns 0 on success.
  *
  *****************************************************************************/
 
@@ -728,7 +729,7 @@ static int rt_add_key_pair(rt_t * rt, const char * line, int lineno) {
   rt_key_value(line, &newkey, &newval);
 
   ifail = rt_add_key_value_pair(rt, newkey, newval, lineno);
-  
+
   free(newkey);
   free(newval);
 
@@ -751,8 +752,8 @@ static int rt_add_key_value_pair(rt_t * rt, const char * key,
     /* Put the new key at the head of the list. */
     rt->nkeys += 1;
 
-    strncpy(pnew->key, key, NKEY_LENGTH - strnlen(key, NKEY_LENGTH) - 1);
-    strncpy(pnew->val, val, NKEY_LENGTH - strnlen(val, NKEY_LENGTH) - 1);
+    strncat(pnew->key, key, NKEY_LENGTH - 1);
+    strncat(pnew->val, val, NKEY_LENGTH - 1);
 
     pnew->is_active = 1;
     pnew->input_line_no = lineno;
@@ -785,7 +786,7 @@ int rt_key_present(rt_t * rt, const char * key) {
       break;
     }
   }
-  
+
   return present;
 }
 
@@ -794,7 +795,7 @@ int rt_key_present(rt_t * rt, const char * key) {
  *  rt_look_up_key
  *
  *  Look through the list of keys to find one matching "key"
- *  and return the corrsponding value string.
+ *  and return the corresponding value string.
  *
  *****************************************************************************/
 
@@ -810,10 +811,9 @@ static int rt_look_up_key(rt_t * rt, const char * key, char * value) {
   for ( ; pkey; pkey = pkey->next) {
 
     if (strcmp(pkey->key, key) == 0) {
-      int len = strnlen(pkey->val, NKEY_LENGTH);
       pkey->is_active = 0;
       key_present = 1;
-      strncpy(value, pkey->val, NKEY_LENGTH - len - 1);
+      strcat(value, pkey->val);
 
       break;
     }
@@ -847,17 +847,19 @@ int rt_key_required(rt_t * rt, const char * key, rt_enum_t level) {
     /* No problem */
   }
   else {
-    strncpy(value, key, strnlen(key, NKEY_LENGTH-1));
+    char keymissing[NKEY_LENGTH] = {0};
+
+    strncat(keymissing, key, NKEY_LENGTH - 1);
 
     /* Information */
     if (level == RT_INFO) {
       pe_info(rt->pe, "The following input key is absent...\n");
-      pe_info(rt->pe, "A default value will be used for: %s\n", value);
+      pe_info(rt->pe, "A default value will be used for: %s\n", keymissing);
     }
     /* Fatal */
     if (level == RT_FATAL) {
       pe_info(rt->pe, "The following input key is missing...\n");
-      pe_info(rt->pe, "Required key: %s\n", value);
+      pe_info(rt->pe, "Required key: %s\n", keymissing);
       pe_fatal(rt->pe, "Please check the input and try again.\n");
     }
   }

@@ -38,6 +38,7 @@ static int test_mpi_file_get_view(void);
 static int test_mpi_file_set_view(void);
 static int test_mpi_type_create_subarray(void);
 static int test_mpi_file_write_all(void);
+static int test_mpi_file_write_at(void);
 
 static int test_mpi_comm_split_type(void);
 static int test_mpi_cart_create(void);
@@ -152,6 +153,7 @@ int main (int argc, char ** argv) {
   test_mpi_file_set_view();
   test_mpi_type_create_subarray();
   test_mpi_file_write_all();
+  test_mpi_file_write_at();
 
   ireturn = MPI_Finalize();
   assert(ireturn == MPI_SUCCESS);
@@ -965,4 +967,54 @@ static int test_mpi_type_get_extent(void) {
   }
 
   return 0;
+}
+
+/*****************************************************************************
+ *
+ *  test_mpi_file_write_at
+ *
+ *****************************************************************************/
+
+int test_mpi_file_write_at(void) {
+
+  int ifail = 0;
+  int rank  = 0;
+  MPI_Comm comm = MPI_COMM_WORLD;
+
+  MPI_Comm_rank(comm, &rank);
+
+  /* Null file handle is error */
+  {
+    MPI_File fh = MPI_FILE_NULL;
+    MPI_Status status = {0};
+
+    ifail = MPI_File_write_at(fh, 0, "1\n", 2, MPI_CHAR, &status);
+    assert(ifail != MPI_SUCCESS);
+  }
+
+  /* Two lines written out-of-order at rank zero */
+  {
+    const char * line1 = "1\n";
+    const char * line2 = "2\n";
+    MPI_File fh = MPI_FILE_NULL;
+
+    ifail = MPI_File_open(comm, "test_mpi_file_write_at.dat",
+			  MPI_MODE_CREATE | MPI_MODE_WRONLY,
+			  MPI_INFO_NULL, &fh);
+    if (rank == 0) {
+      MPI_Offset offset = 2;
+      /* Number of datatype elements actually stored is "written in status" */
+      /* ... would need MPI_Get_count() to recover it. */
+      ifail = MPI_File_write_at(fh, offset, line2, 2, MPI_CHAR,
+				MPI_STATUS_IGNORE);
+      ifail = MPI_File_write_at(fh, 0,      line1, 2, MPI_CHAR,
+				MPI_STATUS_IGNORE);
+      assert(ifail == 0);
+    }
+
+    ifail = MPI_File_close(&fh);
+    remove("test_mpi_file_write_at.dat");
+  }
+
+  return ifail;
 }

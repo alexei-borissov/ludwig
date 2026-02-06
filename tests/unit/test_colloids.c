@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2021 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -27,6 +27,10 @@ int test_colloids_info_with_ncell(pe_t * pe, cs_t * cs, int ncellref[3]);
 int test_colloids_info_add_local(colloids_info_t * cinfo);
 int test_colloids_info_cell_coords(colloids_info_t * cinfo);
 
+int test_colloids_info_initialise(pe_t * pe, cs_t * cs);
+int test_colloids_info_finalise(pe_t * pe, cs_t * cs);
+
+
 /*****************************************************************************
  *
  *  test_colloids_info_suite
@@ -43,6 +47,10 @@ int test_colloids_info_suite(void) {
   cs_create(pe, &cs);
   cs_init(cs);
 
+  test_colloids_info_initialise(pe, cs);
+  test_colloids_info_finalise(pe, cs);
+
+  /* Older tests */
   ncell[X] = 2;
   ncell[Y] = 2;
   ncell[Z] = 2;
@@ -74,6 +82,105 @@ int test_colloids_info_suite(void) {
 
 /*****************************************************************************
  *
+ *  test_colloids_info_initialise
+ *
+ *****************************************************************************/
+
+int test_colloids_info_initialise(pe_t * pe, cs_t * cs) {
+
+  int ifail = 0;
+
+  /* Options specify no colloids (default options) */
+
+  {
+    colloid_options_t options = colloid_options_default();
+    colloids_info_t info = {0};
+
+    ifail = colloids_info_initialise(pe, cs, &options, &info);
+    assert(ifail == 0);
+
+    assert(info.nhalo      == 1);
+    assert(info.ntotal     == 0);
+    assert(info.nallocated == 0);
+    assert(info.ncell[X]   == options.ncell[X]);
+    assert(info.ncell[Y]   == options.ncell[Y]);
+    assert(info.ncell[Z]   == options.ncell[Z]);
+    /* strides */
+    /* sites */
+
+    assert(info.nsubgrid     == 0);
+
+    assert(fabs(info.rho0 - 1.0) < DBL_EPSILON);
+
+    assert(info.isgravity    == 0);
+    assert(info.isbuoyancy   == 0);
+    assert(fabs(info.fgravity[X] - 0.0) < DBL_EPSILON);
+    assert(fabs(info.fgravity[Y] - 0.0) < DBL_EPSILON);
+    assert(fabs(info.fgravity[Z] - 0.0) < DBL_EPSILON);
+    assert(fabs(info.bgravity[X] - 0.0) < DBL_EPSILON);
+    assert(fabs(info.bgravity[Y] - 0.0) < DBL_EPSILON);
+    assert(fabs(info.bgravity[Z] - 0.0) < DBL_EPSILON);
+
+    assert(info.clist     != NULL);
+    assert(info.map_old   == NULL);
+    assert(info.map_new   == NULL);
+    assert(info.headall   == NULL);
+    assert(info.headlocal == NULL);
+
+    assert(info.pe        == pe);
+    assert(info.cs        == cs);
+    assert(info.target    != NULL);
+
+    colloids_info_finalise(&info);
+  }
+
+  /* For have_colloids, check components which are now active */
+
+  {
+    colloid_options_t opts = colloid_options_have_colloids(1);
+    colloids_info_t info   = {0};
+
+    ifail = colloids_info_initialise(pe, cs, &opts, &info);
+    assert(ifail == 0);
+    assert(info.map_new != NULL);
+    assert(info.map_old != NULL);
+
+    colloids_info_finalise(&info);
+  }
+
+  return ifail;
+}
+
+/*****************************************************************************
+ *
+ *  test_colloids_info_finalise
+ *
+ *****************************************************************************/
+
+int test_colloids_info_finalise(pe_t * pe, cs_t * cs) {
+
+  int ifail = 0;
+
+  {
+    colloid_options_t opts = colloid_options_default();
+    colloids_info_t   info = {0};
+
+    ifail = colloids_info_initialise(pe, cs, &opts, &info);
+    ifail = colloids_info_finalise(&info);
+    assert(ifail == 0);
+
+    /* A subset of components... */
+    assert(info.nhalo  == 0);
+    assert(info.clist  == NULL);
+    assert(info.target == NULL);
+  }
+
+  return ifail;
+}
+
+
+/*****************************************************************************
+ *
  *  test_colloids_info_with_ncell
  *
  *****************************************************************************/
@@ -87,6 +194,8 @@ int test_colloids_info_with_ncell(pe_t * pe, cs_t * cs, int ncellref[3]) {
   double ltot[3];
   double lcell[3];
   double lcellref;
+
+  colloid_options_t opts  = colloid_options_ncell(ncellref);
   colloids_info_t * cinfo = NULL;
 
   assert(pe);
@@ -95,7 +204,7 @@ int test_colloids_info_with_ncell(pe_t * pe, cs_t * cs, int ncellref[3]) {
   cs_ltot(cs, ltot);
   cs_cartsz(cs, mpi_cartsz);
 
-  colloids_info_create(pe, cs, 27, ncellref, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   colloids_info_ncell(cinfo, ncell);
@@ -116,7 +225,7 @@ int test_colloids_info_with_ncell(pe_t * pe, cs_t * cs, int ncellref[3]) {
   test_colloids_info_cell_coords(cinfo);
   test_colloids_info_add_local(cinfo);
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }

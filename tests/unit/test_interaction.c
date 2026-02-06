@@ -8,7 +8,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2023-2024 The University of Edinburgh
+ *  (c) 2023-2025 The University of Edinburgh
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
@@ -58,13 +58,15 @@ int test_colloids_update_forces_external(pe_t * pe) {
   int ncells[3] = {8, 8, 8};
   cs_t * cs = NULL;
   colloid_t * pc = NULL;
+
+  colloid_options_t opts  = colloid_options_ncell(ncells);
   colloids_info_t * cinfo = NULL;
 
   double s[3] = {1.0, 0.0, 0.0};  /* A magnetic dipole */
 
   cs_create(pe, &cs);
   cs_init(cs);
-  colloids_info_create(pe, cs, 27, ncells, &cinfo); // dummy nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
 
   {
     /* Add a sample colloid to list */
@@ -112,7 +114,7 @@ int test_colloids_update_forces_external(pe_t * pe) {
     physics_free(phys);
   }
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   cs_free(cs);
 
   return ifail;
@@ -130,11 +132,13 @@ int test_colloids_update_forces_fluid_body_force(pe_t * pe) {
   int ncells[3] = {8, 8, 8};
   cs_t * cs = NULL;
   colloid_t * pc = NULL;
+
+  colloid_options_t opts  = colloid_options_ncell(ncells);
   colloids_info_t * cinfo = NULL;
 
   cs_create(pe, &cs);
   cs_init(cs);
-  colloids_info_create(pe, cs, 27, ncells, &cinfo); // Dummy nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
 
   {
     /* Add a sample colloid to list */
@@ -187,7 +191,7 @@ int test_colloids_update_forces_fluid_body_force(pe_t * pe) {
     physics_free(phys);
   }
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   cs_free(cs);
 
   return ifail;
@@ -208,12 +212,14 @@ int test_colloids_update_forces_buoyancy(pe_t * pe) {
   map_options_t opts = map_options_default();
   map_t * map = NULL;
   colloid_t * pc = NULL;
-  colloids_info_t * cinfo = NULL;
+
+  colloid_options_t options = colloid_options_ncell(ncells);
+  colloids_info_t * cinfo   = NULL;
 
   cs_create(pe, &cs);
   cs_init(cs);
   map_create(pe, cs, &opts, &map);
-  colloids_info_create(pe, cs, 27, ncells, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &options, &cinfo);
 
   {
     /* Add a sample colloid to list */
@@ -266,7 +272,7 @@ int test_colloids_update_forces_buoyancy(pe_t * pe) {
     physics_free(phys);
   }
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   map_free(&map);
   cs_free(cs);
 

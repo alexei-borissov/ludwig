@@ -83,6 +83,7 @@
 /* Colloids */
 #include "colloids_rt.h"
 #include "colloid_sums.h"
+#include "colloids_file_io.h"
 #include "colloids_halo.h"
 #include "build.h"
 #include "build_links_arrays.h"
@@ -162,7 +163,6 @@ struct ludwig_s {
   visc_t * visc;               /* Viscosity model */
 
   colloids_info_t * collinfo;  /* Colloid information */
-  colloid_io_t * cio;          /* Colloid I/O harness */
   ewald_t * ewald;             /* Ewald sum for dipoles */
   interact_t * interact;       /* Colloid-colloid interaction handler */
   bbl_t * bbl;                 /* Bounce-back on links boundary condition */
@@ -276,7 +276,7 @@ static int ludwig_rt(ludwig_t * ludwig) {
   }
 
   wall_rt_init(pe, cs, rt, ludwig->lb, ludwig->map, &ludwig->wall);
-  colloids_init_rt(pe, rt, cs, &ludwig->collinfo, &ludwig->cio,
+  colloids_init_rt(pe, rt, cs, &ludwig->collinfo,
 		   &ludwig->interact, ludwig->wall, ludwig->map,
 		   &ludwig->lb->model);
   colloids_init_ewald_rt(pe, rt, cs, ludwig->collinfo, &ludwig->ewald);
@@ -539,7 +539,7 @@ void ludwig_run(const char * inputfile) {
       hydro_f_zero(ludwig->hydro, fzero);
     }
 
-    if ((step % ludwig->collinfo->rebuild_freq) == 0) {
+    if ((step % ludwig->collinfo->options.bbl_build_freq) == 0) {
       ludwig_colloids_update(ludwig);
     }
     else {
@@ -881,9 +881,17 @@ void ludwig_run(const char * inputfile) {
 
     if (is_config_step() || is_measurement_step() || is_colloid_io_step()) {
       if (ncolloid > 0) {
+	int ifail = 0;
+	char cfilename[BUFSIZ] = {0};
+	colloids_file_io_t fio = {0};
 	pe_info(ludwig->pe, "Writing colloid output at step %d!\n", step);
-	sprintf(filename, "%s%8.8d", "config.cds", step);
-	colloid_io_write(ludwig->cio, filename);
+	snprintf(cfilename, BUFSIZ-1, "colloids-%9.9d.dat", step);
+	colloids_file_io_initialise(ludwig->collinfo, &fio);
+	ifail = colloids_file_io_write(&fio, cfilename);
+	colloids_file_io_finalise(&fio);
+	if (ifail != MPI_SUCCESS) {
+	  rt_vinfo(ludwig->rt, RT_FATAL, "Try do continue...");
+	}
       }
     }
 
@@ -1023,7 +1031,7 @@ void ludwig_run(const char * inputfile) {
   if (ludwig->q)        field_free(ludwig->q);
 
   bbl_free(ludwig->bbl);
-  colloids_info_free(ludwig->collinfo);
+  colloids_info_free(&ludwig->collinfo);
 
   if (ludwig->inflow) ludwig->inflow->func->free(ludwig->inflow);
   if (ludwig->outflow) ludwig->outflow->func->free(ludwig->outflow);
@@ -1031,15 +1039,10 @@ void ludwig_run(const char * inputfile) {
   if (ludwig->phi_outflow) ludwig->phi_outflow->func->free(ludwig->phi_outflow);
 
   if (ludwig->interact) interact_free(ludwig->interact);
-  if (ludwig->cio)      colloid_io_free(ludwig->cio);
 
   if (ludwig->wall)      wall_free(ludwig->wall);
-#ifdef OLD_SHIT
-  if (ludwig->noise_phi) noise_free(ludwig->noise_phi);
-  if (ludwig->noise_rho) noise_free(ludwig->noise_rho);
-#else
   if (ludwig->noise)     noise_free(&ludwig->noise);
-#endif
+
   if (ludwig->be)        beris_edw_free(ludwig->be);
   if (ludwig->map)       map_free(&ludwig->map);
   if (ludwig->pch)       phi_ch_free(ludwig->pch);
@@ -2516,4 +2519,3 @@ int field_options_from_rt(rt_t * rt, rt_enum_t lv, int nfield, int nhalo,
 
   return ifail;
 }
-  

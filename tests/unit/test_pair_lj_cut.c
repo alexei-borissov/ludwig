@@ -5,7 +5,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2014-2021 The University of Edinburgh
+ *  (c) 2014-2025 The University of Edinburgh
  *
  *  Contributing authors;
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -101,16 +101,17 @@ int test_pair_lj_cut1(pe_t * pe, cs_t * cs) {
 
 int test_pair_lj_cut2(pe_t * pe, cs_t * cs) {
 
-  int ncell[3] = {2, 2, 2};
 
+  colloid_options_t opts  = colloid_options_default();
   colloids_info_t * cinfo = NULL;
+
   interact_t * interact = NULL;
   pair_lj_cut_t * lj = NULL;
 
   assert(pe);
   assert(cs);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // Dummy value nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   interact_create(pe, cs, &interact);
   pair_lj_cut_create(pe, cs, &lj);
 
@@ -127,7 +128,7 @@ int test_pair_lj_cut2(pe_t * pe, cs_t * cs) {
 
   pair_lj_cut_free(lj);
   interact_free(interact);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }

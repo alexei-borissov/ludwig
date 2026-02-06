@@ -5,7 +5,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2025 The University of Edinburgh
+ *  (c) 2025-2026 The University of Edinburgh
  *
  *****************************************************************************/
 
@@ -14,7 +14,8 @@
 
 #include "colloid.h"
 
-#define COLLOID_BUFSZ (NTOT_VAR*25) /* format 25 char per item */
+#define LUDWIG_COLLOID_IO_VERSION 202601         /* At addition of mpi/io */
+#define LUDWIG_COLLOID_IO_BUFSZ  (NTOT_VAR * 25) /* format 25 char per item */
 
 int colloid_state_io_write_buf(const colloid_state_t * s, char * buf);
 int colloid_state_io_write_buf_ascii(const colloid_state_t * s, char * buf);

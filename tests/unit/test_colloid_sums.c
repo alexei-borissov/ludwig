@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2020 The University of Edinburgh
+ *  (c) 2010-2025 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -143,12 +143,14 @@ static int test_colloid_sums_edge(pe_t * pe, cs_t * cs, int ncell[3],
   colloid_t   cref1;   /* All ranks get the same reference colloids */
   colloid_t   cref2;
   colloid_sum_t * halosum = NULL;
+
+  colloid_options_t opts  = colloid_options_ncell(ncell);
   colloids_info_t * cinfo = NULL;
 
   test_colloid_sums_reference_set(&cref1, 1);
   test_colloid_sums_reference_set(&cref2, 2);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
   colloid_sums_create(cinfo, &halosum);
   assert(halosum);
@@ -207,7 +209,7 @@ static int test_colloid_sums_edge(pe_t * pe, cs_t * cs, int ncell[3],
   /* Finish */
 
   colloid_sums_free(halosum);
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
 
   return 0;
 }
@@ -238,7 +240,7 @@ static int test_colloid_sums_reference_set(colloid_t * pc, int seed) {
     pc->cbar[ia] = 1.0*ivalue++;
     pc->rxcbar[ia] = 1.0*ivalue++;
   }
- 
+
   /* DYNAMICS */
 
   for (ia = 0; ia < 3; ia++) {
@@ -369,6 +371,8 @@ static int test_colloid_sums_move(pe_t * pe) {
 
   cs_t * cs = NULL;
   colloid_t * pc;
+
+  colloid_options_t opts  = colloid_options_ncell(ncell);
   colloids_info_t * cinfo = NULL;
 
   assert(pe);
@@ -377,7 +381,7 @@ static int test_colloid_sums_move(pe_t * pe) {
   cs_ntotal_set(cs, ntotal);
   cs_init(cs);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   dx = 1.0*ntotal[X]/nstep;
@@ -402,7 +406,7 @@ static int test_colloid_sums_move(pe_t * pe) {
 	    pc->s.r[Y] -= dx;
 	    pc = pc->next;
 	  }
-	  
+
 	}
       }
     }
@@ -414,7 +418,7 @@ static int test_colloid_sums_move(pe_t * pe) {
 
   /* Success */
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   cs_free(cs);
 
   return 0;
@@ -439,6 +443,8 @@ int test_colloid_sums_conservation(pe_t * pe) {
 
   cs_t * cs = NULL;
   colloid_t * pc;
+
+  colloid_options_t opts  = colloid_options_ncell(ncell);
   colloids_info_t * cinfo = NULL;
 
   assert(pe);
@@ -447,7 +453,7 @@ int test_colloid_sums_conservation(pe_t * pe) {
   cs_ntotal_set(cs, ntotal);
   cs_init(cs);
 
-  colloids_info_create(pe, cs, 27, ncell, &cinfo); // nvel=27
+  colloids_info_create(pe, cs, &opts, &cinfo);
   assert(cinfo);
 
   index = 1;
@@ -461,7 +467,7 @@ int test_colloid_sums_conservation(pe_t * pe) {
   if (pc) {
     pc->s.deltaphi = 1.0;
     pc->dq[0]  = 10.0;
-    pc->dq[1]  = 100.0;    
+    pc->dq[1]  = 100.0;
   }
 
   /* Make the sum, and check all copies. */
@@ -480,14 +486,14 @@ int test_colloid_sums_conservation(pe_t * pe) {
 	  assert(fabs(pc->dq[1]  - 100.0) < DBL_EPSILON);
 	  pc = pc->next;
 	}
-	  
+
       }
     }
   }
 
   /* Success */
 
-  colloids_info_free(cinfo);
+  colloids_info_free(&cinfo);
   cs_free(cs);
 
   return 0;

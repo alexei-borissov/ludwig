@@ -3,7 +3,7 @@
 #  Makefile
 #
 #  Various targets for utility programs to perform pre-processing
-#  and post-processing tasks.
+#  and post-processing tasks. Not all are up-to-date.
 #
 #  Note all the builds are parallel, but the utilities are
 #  intended to be run in serial.
@@ -11,7 +11,7 @@
 #  Edinburgh Soft Matter and Statistical Physics Group and
 #  Edinburgh Parallel Computing Centre
 #
-#  (c) 2016-2023 The University of Edinburgh
+#  (c) 2016-2026 The University of Edinburgh
 #
 #  Contributing authors:
 #  Kevin Stratford (kevin@epcc.ed.ac.uk)

@@ -17,7 +17,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2021-2024 The University of Edinburgh
+ *  (c) 2021-2026 The University of Edinburgh
  *
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
  *
@@ -1250,7 +1250,6 @@ int MPI_Type_indexed(int count, int * array_of_blocklengths,
   ERR_IF_COMM_MPI_ERR_ARG(self, array_of_displacements == NULL, fname);
   ERR_IF_COMM_MPI_ERR_DATATYPE(self, oldtype, fname);
   ERR_IF_COMM_MPI_ERR_ARG(self, newtype == NULL, fname);
-
   {
     data_t dt = {0};
 
@@ -1937,6 +1936,46 @@ int MPI_Type_create_struct(int count, int array_of_blocklengths[],
 
 /*****************************************************************************
  *
+ *  MPI_Type_create_indexed_block
+ *
+ *  Make the assumption that the total size of write is determined
+ *  by the last displacement and the blocklength, along with the
+ *  size of the oldtype.
+ *
+ *****************************************************************************/
+
+int MPI_Type_create_indexed_block(int count, int blocklength,
+				  const int * array_of_displacements,
+				  MPI_Datatype oldtype,
+				  MPI_Datatype * newtype) {
+  int ifail = MPI_SUCCESS;
+  MPI_Comm self = MPI_COMM_SELF;
+  const char * fname = "MPI_Type_create_indexed_block()";
+
+  ERR_IF_MPI_NOT_INITIALISED(fname);
+  ERR_IF_COMM_MPI_ERR_COUNT(self, count, fname);
+  ERR_IF_COMM_MPI_ERR_COUNT(self, blocklength, fname);
+  ERR_IF_COMM_MPI_ERR_ARG(self, array_of_displacements == NULL, fname);
+  ERR_IF_COMM_MPI_ERR_DATATYPE(self, oldtype, fname);
+  ERR_IF_COMM_MPI_ERR_ARG(self, newtype == NULL, fname);
+
+  {
+    data_t dt = {0};
+
+    dt.handle  = MPI_DATATYPE_NULL;
+    dt.bytes   = blocklength*count*mpi_sizeof(oldtype);
+    dt.commit  = 0;
+    dt.flavour = DT_NOT_IMPLEMENTED; /* Displacements not handled */
+
+    mpi_data_type_add(mpi_info_, &dt, newtype);
+  }
+
+ err:
+  return ifail;
+}
+
+/*****************************************************************************
+ *
  *  MPI_Type_get_extent
  *
  *****************************************************************************/
@@ -1991,6 +2030,9 @@ int MPI_Type_size(MPI_Datatype datatype, int * sz) {
 /*****************************************************************************
  *
  *  MPI_File_open
+ *
+ *  We are not handling all possible modes at the moment, e.g.,
+ *  MPI_MODE_DELETE_ON_CLOSE
  *
  *****************************************************************************/
 
@@ -2396,6 +2438,51 @@ int MPI_File_write_all_end(MPI_File fh, const void * buf, MPI_Status * status) {
   ERR_IF_MPI_NOT_INITIALISED(fname);
   ERR_IF_FILE_MPI_ERR_FILE(fh, fname);
   ERR_IF_FILE_MPI_ERR_BUFFER(fh, buf, fname);
+
+  if (status != MPI_STATUS_IGNORE) status->MPI_ERROR = MPI_SUCCESS;
+
+ err:
+  return ifail;
+}
+
+/*****************************************************************************
+ *
+ *  MPI_File_write_at
+ *
+ *****************************************************************************/
+
+int MPI_File_write_at(MPI_File fh, MPI_Offset offset, const void * buf,
+		      int count, MPI_Datatype datatype, MPI_Status * status) {
+
+  int ifail = MPI_SUCCESS;
+  const char * fname = "MPI_File_write_at()";
+
+  ERR_IF_MPI_NOT_INITIALISED(fname);
+  ERR_IF_FILE_MPI_ERR_FILE(fh, fname);
+  /* Offset argument not checked */
+  ERR_IF_FILE_MPI_ERR_BUFFER(fh, buf, fname);
+  ERR_IF_FILE_MPI_ERR_COUNT(fh, count, fname);
+  ERR_IF_FILE_MPI_ERR_DATATYPE(fh, datatype, fname);
+
+
+  {
+    FILE * fp = mpi_file_handle_to_fp(mpi_info_, fh);
+
+    /* Displacement (returns -1 on fail and errno is set) */
+    int iseek = fseek(fp, offset, SEEK_SET);
+
+    /* Translate to a simple fwrite() */
+    /* A short count of items indicates an error ... */
+
+    size_t size   = mpi_sizeof(datatype);
+    size_t nitems = count;
+    size_t nwrite = fwrite(buf, size, nitems, fp);
+
+    if (iseek != 0 || nwrite < nitems) {
+      ifail = MPI_ERR_IO;
+      printf("MPI_File_write_all(): "); if (ferror(fp)) perror(NULL);
+    }
+  }
 
   if (status != MPI_STATUS_IGNORE) status->MPI_ERROR = MPI_SUCCESS;
 
