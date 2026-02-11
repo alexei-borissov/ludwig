@@ -119,7 +119,6 @@ struct colloids_info_s {
   int str[3];                 /* Strides for cell list */
   int nsites;                 /* Total number of map sites */
   int ncells;                 /* Total number of cells */
-  int nvel;                   /* The number of velocities */
 
   int nsubgrid;               /* Total number of subgrid particles */
 
