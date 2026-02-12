@@ -198,8 +198,6 @@ int pair_ss_cut_compute(colloids_info_t * cinfo, void * obj) {
 
   colloids_info_ncell(cinfo, ncell);
 
-  colloids_array_check(cinfo); // XXX: Check that colloids in "all" list have same indices as colloids array
-
   for (ic1 = 1; ic1 <= ncell[X]; ic1++) {
     colloids_info_climits(cinfo, X, ic1, di); 
     for (jc1 = 1; jc1 <= ncell[Y]; jc1++) {

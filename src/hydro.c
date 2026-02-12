@@ -262,7 +262,6 @@ __host__ int hydro_f_zero(hydro_t * obj, const double fzero[NHDIM]) {
   return 0;
 }
 
-
 /*****************************************************************************
  *
  *  hydro_rho0
