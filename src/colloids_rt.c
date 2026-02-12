@@ -150,12 +150,9 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
   colloid_options_to_vinfo(rt, RT_INFO, &options);
 
   if (init_one) colloids_rt_init_few(pe, rt, *pinfo, 1);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_two) colloids_rt_init_few(pe, rt, *pinfo, 2);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (init_three) colloids_rt_init_few(pe, rt, *pinfo, 3);
   if (init_random) colloids_rt_init_random(pe, cs, rt, wall, *pinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   if (init_from_file) {
     int nstep = 0;
