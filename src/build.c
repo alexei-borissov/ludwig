@@ -266,7 +266,7 @@ int build_update_links(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  /* Next colloid */
 
-	  //pc->s.rebuild = 0;
+	  pc->s.rebuild = 0;
 	}
 
 	/* Next cell */
@@ -1641,7 +1641,6 @@ int build_conservation_phi(colloids_info_t * cinfo, field_t * phi,
 
   return 0;
 }
-
 /*****************************************************************************
  *
  *  build_update_map_kernel

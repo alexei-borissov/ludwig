@@ -1061,6 +1061,8 @@ __host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
   cinfo->nallocated += 1;
   *pc = obj;
 
+  //create_links_arrays(cinfo, *pc);
+
   return 0;
 }
 
@@ -1075,7 +1077,6 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc) {
   assert(cinfo);
   assert(pc);
 
-  //colloid_link_free_list(pc->lnk);
   colloid_free_links_arrays(pc);
   tdpAssert(tdpFree(pc));
 
@@ -1290,11 +1291,8 @@ __host__ int colloids_info_position_update(colloids_info_t * cinfo) {
 __host__ int colloids_info_update_lists(colloids_info_t * cinfo) {
 
   colloids_info_list_local_build(cinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_info_list_all_build(cinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   update_colloids_array(cinfo);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   return 0;
 }
@@ -1344,6 +1342,9 @@ __host__ int colloids_info_list_all_build(colloids_info_t * cinfo) {
       }
     }
   }
+  
+  /* update target headall */
+  cinfo->target->headall = cinfo->headall;
 
   return 0;
 }
@@ -1775,20 +1776,15 @@ void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
 void update_colloids_array(colloids_info_t * cinfo) {
   /* Copy over colloids pointers to array*/
   int n_total;
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   colloids_info_ntotal(cinfo, &n_total);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   if (n_total > cinfo->colloid_array.max_colloids) {
     if (cinfo->colloid_array.max_colloids > 0) {
       colloids_array_resize(&cinfo->colloid_array);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     } else {
       colloids_array_create(&cinfo->colloid_array, n_total);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
     }
   }
   set_colloids_array(cinfo, n_total);
-  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 }
 
 void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo) {

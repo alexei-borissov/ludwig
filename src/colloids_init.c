@@ -253,9 +253,7 @@ static int colloids_init_check_wall(pe_t * pe, cs_t * cs,
 }
 
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
-  int rank;
-  colloids_info_update_lists(cinfo);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  //colloids_info_update_lists(cinfo);
 
   pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
   tdpAssert(tdpMallocManaged((void **) &pc->linki, pc->max_links*sizeof(int), tdpMemAttachGlobal));

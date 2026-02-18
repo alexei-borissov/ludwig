@@ -65,6 +65,58 @@ int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
 int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
 			   const lb_model_t * model);
 
+__global__ int build_update_map_links_arrays_kernel(kernel_3d_t k3d, map_t * map, double c, double h) {
+
+  int kindex = 0;
+
+  for_simt_parallel(kindex, k3d.kiterations, 1) {
+    int ic = kernel_3d_ic(&k3d, kindex);
+    int jc = kernel_3d_jc(&k3d, kindex);
+    int kc = kernel_3d_kc(&k3d, kindex);
+
+	  /* This avoids setting BOUNDARY to FLUID */
+	  int index = cs_index(map->cs, ic, jc, kc);
+    int status = MAP_FLUID;
+	  map_status(map, index, &status);
+	  if (status == MAP_COLLOID) {
+	    /* Set wetting properties to zero. */
+      double wet[2] = {c, h};
+	    map_status_set(map, index, MAP_FLUID);
+	    map_data_set(map, index, wet);
+	  }
+  }
+}
+
+int build_update_map_links_arrays_driver(map_t * map) {
+
+  int ifail = 0;
+
+  const double c = 0;
+  const double h = 0;
+
+  assert(map);
+
+  if (map->ndata == 0) {
+    ifail = -1;
+  } else {
+    int  nhalo = map->cs->param->nhalo;
+    dim3 nblk = {};
+    dim3 ntpb = {};
+
+    cs_limits_t lim = {1 - nhalo, map->cs->param->nlocal[X] + nhalo,
+                       1 - nhalo, map->cs->param->nlocal[Y] + nhalo,
+                       1 - nhalo, map->cs->param->nlocal[Z] + nhalo};
+    kernel_3d_t k3d = kernel_3d(map->cs, lim);
+
+    kernel_3d_launch_param(k3d.kiterations, &nblk, &ntpb);
+
+    tdpLaunchKernel(build_update_map_links_arrays_kernel, nblk, ntpb, 0, 0, k3d, map->target, c, h);
+
+    tdpAssert(tdpPeekAtLastError());
+    tdpAssert(tdpStreamSynchronize(0));
+  }
+}
+
 /*****************************************************************************
  *
  *  build_update_map_links_arrays
@@ -113,25 +165,7 @@ int build_update_map_links_arrays(cs_t * cs, colloids_info_t * cinfo, map_t * ma
   colloids_info_ncell(cinfo, ncell);
 
   /* First, set any existing colloid sites to fluid */
-
-  for (ic = 1 - nhalo; ic <= nlocal[X] + nhalo; ic++) {
-    for (jc = 1 - nhalo; jc <= nlocal[Y] + nhalo; jc++) {
-      for (kc = 1 - nhalo; kc <= nlocal[Z] + nhalo; kc++) {
-
-	/* This avoids setting BOUNDARY to FLUID */
-	index = cs_index(cs, ic, jc, kc);
-	map_status(map, index, &status);
-	if (status == MAP_COLLOID) {
-	  /* Set wetting properties to zero. */
-	  map_status_set(map, index, MAP_FLUID);
-	  wet[0] = 0.0;
-	  wet[1] = 0.0;
-	  map_data_set(map, index, wet);
-	}
-
-      }
-    }
-  }
+  build_update_map_links_arrays_driver(map);
 
   colloids_info_map_update(cinfo);
 
@@ -265,7 +299,7 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 	  if (pc->s.bc != COLLOID_BC_BBL) continue;
     
     if (pc->linki == NULL) {
-      create_links_arrays(cinfo, pc);
+      //create_links_arrays(cinfo, pc);
     }
 
 	  pc->sumw   = 0.0;
