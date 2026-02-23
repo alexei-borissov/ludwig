@@ -21,7 +21,5 @@
 int colloids_init_random(pe_t * pe, cs_t * cs, colloids_info_t * cinfo, int n,
 			 const colloid_state_t * state0, wall_t * wall,
 			 double dh);
-void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
-void colloid_free_links_arrays(colloid_t * pc);
 
 #endif

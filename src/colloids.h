@@ -216,6 +216,8 @@ __host__ void update_colloids_array(colloids_info_t * cinfo);
 __host__ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo);
 __host__ void colloids_array_check(colloids_info_t * cinfo);
 
+void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
+
 
 int colloids_info_add_state_local(colloids_info_t * info,
 				  const colloid_state_t * state);
