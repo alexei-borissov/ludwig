@@ -25,7 +25,6 @@
 #include "util_vector.h"
 #include "util_ellipsoid.h"
 #include "colloids.h"
-#include "colloids_init.h"
 
 __host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc);
 __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
