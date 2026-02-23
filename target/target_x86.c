@@ -447,30 +447,6 @@ tdpError_t tdpMallocManaged(void ** devptr, size_t size, unsigned int flag) {
 
 /*****************************************************************************
  *
- *  tdpReallocManaged
- *
- *****************************************************************************/
-
-tdpError_t tdpReallocManaged(void ** devptr, size_t size, int factor, unsigned int flag) {
-
-  void * ptr = NULL;
-  unsigned int valid = (tdpMemAttachGlobal | tdpMemAttachHost);
-
-  assert(devptr);
-
-  error_return_if(size < 1, tdpErrorInvalidValue);
-  error_return_if((flag & (~valid)), tdpErrorInvalidValue);
-
-  ptr = realloc(*devptr, size * factor);
-  error_return_if(ptr == NULL, tdpErrorMemoryAllocation);
-
-  *devptr = ptr;
-
-  return tdpSuccess;
-}
-
-/*****************************************************************************
- *
  *  tdpMemcpy
  *
  *****************************************************************************/

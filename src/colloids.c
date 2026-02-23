@@ -1744,12 +1744,20 @@ void colloids_array_free(colloids_arrays_t * colloids_array) {
 }
 
 void colloids_array_resize(colloids_arrays_t * colloids_array) {
-    if (colloids_array->max_colloids > 0) {
-      tdpAssert( tdpReallocManaged((void **) &colloids_array->colloids, colloids_array->max_colloids*sizeof(colloid_t *), 2, tdpMemAttachGlobal) )
-      tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
-      colloids_array->max_colloids *= 2;
-      //colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
-    }
+  int n_devices;
+  tdpGetDeviceCount(&n_devices);
+
+  if (n_devices == 0) {
+    colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
+  } else if (n_devices > 0) {
+    void *newptr;
+    tdpMallocManaged(&newptr, colloids_array->max_colloids * sizeof(colloid_t *) * 2, tdpMemAttachGlobal);
+    tdpMemcpy(newptr, colloids_array->colloids, colloids_array->max_colloids, tdpMemcpyDeviceToDevice);
+    tdpFree(colloids_array->colloids);
+    colloids_array->colloids = newptr;
+  }
+      
+  colloids_array->max_colloids *= 2;
 }
 
 void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
