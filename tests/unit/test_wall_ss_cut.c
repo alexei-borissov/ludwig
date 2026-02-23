@@ -21,7 +21,7 @@
 
 int test_wall_ss_cut_create(pe_t * pe, cs_t * cs, wall_t * wall);
 int test_wall_ss_cut_single(pe_t * pe, cs_t * cs, wall_t * wall);
-int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb);
+int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall);
 
 /*****************************************************************************
  *
@@ -54,7 +54,7 @@ int test_wall_ss_cut_suite(void) {
 
     test_wall_ss_cut_create(pe, cs, wall);
     test_wall_ss_cut_single(pe, cs, wall);
-    test_wall_ss_cut_compute(pe, cs, wall, lb);
+    test_wall_ss_cut_compute(pe, cs, wall);
 
     wall_free(wall);
     map_free(&map);
@@ -130,7 +130,7 @@ int test_wall_ss_cut_single(pe_t * pe, cs_t * cs, wall_t * wall) {
  *
  *****************************************************************************/
 
-int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall, lb_t * lb) {
+int test_wall_ss_cut_compute(pe_t * pe, cs_t * cs, wall_t * wall) {
 
   colloid_options_t options = colloid_options_default();
   colloids_info_t * cinfo   = NULL;
