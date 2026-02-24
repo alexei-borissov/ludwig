@@ -1754,7 +1754,7 @@ void colloids_array_resize(colloids_arrays_t * colloids_array) {
     tdpMallocManaged(&newptr, colloids_array->max_colloids * sizeof(colloid_t *) * 2, tdpMemAttachGlobal);
     tdpMemcpy(newptr, colloids_array->colloids, colloids_array->max_colloids, tdpMemcpyDeviceToDevice);
     tdpFree(colloids_array->colloids);
-    colloids_array->colloids = newptr;
+    colloids_array->colloids = (colloid_t **) &newptr;
   }
       
   colloids_array->max_colloids *= 2;

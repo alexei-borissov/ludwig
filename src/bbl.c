@@ -275,11 +275,14 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   //bbl_pass2_orig(bbl, lb, cinfo);
   //bbl_pass2(bbl, lb, cinfo);
   //printf("nblk %d %d %d ntpb %d %d %d n colloids %d max %d\n", nblk.x, nblk.y, nblk.z, ntpb.x, ntpb.y, ntpb.z, cinfo->colloid_array.n_colloids, cinfo->colloid_array.max_colloids);
-  //tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
+  ntpb.x = 1;
+  ntpb.y = 1;
+  ntpb.z = 1;
+  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, bbl, lb, cinfo);
   //tdpAssert(tdpStreamSynchronize(0));
   //tdpAssert(tdpPeekAtLastError());
   //printf("finished kernel\n");
-  bbl_pass2(bbl, lb, cinfo);
+  //bbl_pass2(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
