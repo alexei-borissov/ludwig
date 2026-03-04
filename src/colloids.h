@@ -217,6 +217,7 @@ __host__ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_
 __host__ void colloids_array_check(colloids_info_t * cinfo);
 
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
+void test_colloid_links_arrays(colloids_info_t *cinfo);
 
 
 int colloids_info_add_state_local(colloids_info_t * info,

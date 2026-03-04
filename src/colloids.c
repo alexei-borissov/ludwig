@@ -308,6 +308,8 @@ int colloids_info_recreate(const colloid_options_t * newopts,
       pe_fatal(oldinfo->pe, "Colloid position causes cell list failure\n");
     }
     pcnew->s = pc->s;
+
+    create_links_arrays(newinfo, pcnew);
   }
 
   copy_colloids_array_info(oldinfo, newinfo);
@@ -1029,7 +1031,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
   (*pc)->s.rebuild = 1;
 
   colloids_info_insert_colloid(cinfo, *pc);
-
+  
   return 0;
 }
 
@@ -1822,6 +1824,7 @@ void colloids_array_check(colloids_info_t *cinfo) {
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
   //colloids_info_update_lists(cinfo);
 
+  printf("creating links arrays %f\n", pc->s.a0);
   pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
   tdpAssert(tdpMallocManaged((void **) &pc->linki, pc->max_links*sizeof(int), tdpMemAttachGlobal));
   tdpAssert(tdpMallocManaged((void **) &pc->linkj, pc->max_links*sizeof(int), tdpMemAttachGlobal));
@@ -1846,5 +1849,17 @@ void colloid_free_links_arrays(colloid_t * pc) {
     tdpAssert( tdpFree(pc->linkp) );
     tdpAssert( tdpFree(pc->link_status) );
     tdpAssert( tdpFree(pc->linkrb) );
+  }
+}
+
+void test_colloid_links_arrays(colloids_info_t *cinfo) {
+  colloid_t *pc = NULL;
+
+  colloids_info_all_head(cinfo, &pc);
+
+  for (; pc; pc = pc->nextall) {
+    for (int link_index = 0; link_index < 366; link_index++) {
+      pc->linkrb[link_index][X] = 0;
+    }
   }
 }
