@@ -65,7 +65,7 @@ int build_conservation_phi_links_arrays(colloids_info_t * cinfo, field_t * phi,
 int build_conservation_psi_links_arrays(colloids_info_t * cinfo, psi_t * psi,
 			   const lb_model_t * model);
 
-__global__ int build_update_map_links_arrays_kernel(kernel_3d_t k3d, map_t * map, double c, double h) {
+__global__ void build_update_map_links_arrays_kernel(kernel_3d_t k3d, map_t * map, double c, double h) {
 
   int kindex = 0;
 
