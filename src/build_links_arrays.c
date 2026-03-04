@@ -298,10 +298,6 @@ int build_update_links_arrays(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
 	  if (pc->s.bc != COLLOID_BC_BBL) continue;
     
-    if (pc->linki == NULL) {
-      //create_links_arrays(cinfo, pc);
-    }
-
 	  pc->sumw   = 0.0;
 	  for (ia = 0; ia < 3; ia++) {
 	    pc->cbar[ia] = 0.0;

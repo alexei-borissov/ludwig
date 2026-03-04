@@ -198,13 +198,6 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   colloids_halo_state(*pinfo);
 
-  // This location for creating links arrays works, but it should be somewhere closer to where actual colloid creation happens
-  //colloid_t * pc = NULL;
-  //colloids_info_all_head(*pinfo, &pc);
-  //for (; pc; pc = pc->nextall) {
-  //  create_links_arrays(*pinfo, pc);
-  //}
-
   colloids_rt_dynamics(cs, *pinfo, wall, map, model);
   colloids_rt_gravity(pe, rt, *pinfo);
 

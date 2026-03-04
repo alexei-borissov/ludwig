@@ -1063,8 +1063,6 @@ __host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
   cinfo->nallocated += 1;
   *pc = obj;
 
-  //create_links_arrays(cinfo, *pc);
-
   return 0;
 }
 
@@ -1849,17 +1847,5 @@ void colloid_free_links_arrays(colloid_t * pc) {
     tdpAssert( tdpFree(pc->linkp) );
     tdpAssert( tdpFree(pc->link_status) );
     tdpAssert( tdpFree(pc->linkrb) );
-  }
-}
-
-void test_colloid_links_arrays(colloids_info_t *cinfo) {
-  colloid_t *pc = NULL;
-
-  colloids_info_all_head(cinfo, &pc);
-
-  for (; pc; pc = pc->nextall) {
-    for (int link_index = 0; link_index < 366; link_index++) {
-      pc->linkrb[link_index][X] = 0;
-    }
   }
 }
