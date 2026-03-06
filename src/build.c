@@ -426,8 +426,8 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
 
 	    if (status1 == MAP_FLUID) {
 	      p_link->status = LINK_FLUID;
-        build_link_mean(p_colloid, model->wv[p], model->cv[p],
-          p_link->rb);
+	      build_link_mean(p_colloid, model->wv[p], model->cv[p],
+			      p_link->rb);
 	    }
 	    else {
 	      p_link->status = LINK_COLLOID;
@@ -1641,6 +1641,7 @@ int build_conservation_phi(colloids_info_t * cinfo, field_t * phi,
 
   return 0;
 }
+
 /*****************************************************************************
  *
  *  build_update_map_kernel
