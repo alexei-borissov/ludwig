@@ -1820,9 +1820,6 @@ void colloids_array_check(colloids_info_t *cinfo) {
 }
 
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
-  //colloids_info_update_lists(cinfo);
-
-  printf("creating links arrays %f\n", pc->s.a0);
   pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
   tdpAssert(tdpMallocManaged((void **) &pc->linki, pc->max_links*sizeof(int), tdpMemAttachGlobal));
   tdpAssert(tdpMallocManaged((void **) &pc->linkj, pc->max_links*sizeof(int), tdpMemAttachGlobal));
