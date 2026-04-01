@@ -430,6 +430,20 @@ int build_reconstruct_links_array(cs_t * cs, colloids_info_t * cinfo,
 	  colloids_info_map(cinfo, index0, &pc);
 	  if (pc != p_colloid) continue;
 
+    if (link_index >= p_colloid->max_links) {
+      printf("build_links_arrays.c colloid links array too small link index %d max links %d, i j k amounts %d %d %d radius %f. aborting\n", 
+              link_index, p_colloid->max_links, i_max - i_min, j_max - j_min, k_max - k_min, p_colloid->s.a0);
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+    if (!p_colloid->linkrb[link_index]) {
+      printf("build_links_arrays.c colloid links array not initialised link index %d. aborting", link_index);
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+    assert(p_colloid->linkrb[link_index]);
+    if (!p_colloid->linkrb) {
+      printf("build_links_arrays.c colloid links array not initialised. aborting");
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
 	  p_colloid->linkrb[link_index][X] = rsep[X] + lambda*model->cv[p][X];
 	  p_colloid->linkrb[link_index][Y] = rsep[Y] + lambda*model->cv[p][Y];
 	  p_colloid->linkrb[link_index][Z] = rsep[Z] + lambda*model->cv[p][Z];

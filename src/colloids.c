@@ -20,13 +20,14 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "util.h"
 #include "util_vector.h"
 #include "util_ellipsoid.h"
 #include "colloids.h"
 
-__host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc);
+__host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc);
 __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
 void colloid_free_links_arrays(colloid_t * pc);
 
@@ -293,14 +294,14 @@ int colloids_info_recreate(const colloid_options_t * newopts,
   /* Need to copy all colloid state across */
 
   for ( ; pc; pc = pc->nextlocal) {
-    colloids_info_add_local(newinfo, pc->s.index, pc->s.r, &pcnew);
+    colloids_info_add_local(newinfo, pc->s.index, pc->s.r, pc->s.a0, &pcnew);
     if (pcnew == NULL) {
       /* We have dropped a colloid, probably at the new cell list boundary;
        * try adjusting the position by a small amount... */
       pc->s.r[X] += DBL_EPSILON*pc->s.r[X];
       pc->s.r[Y] += DBL_EPSILON*pc->s.r[Y];
       pc->s.r[Z] += DBL_EPSILON*pc->s.r[Z];
-      colloids_info_add_local(newinfo, pc->s.index, pc->s.r, &pcnew);
+      colloids_info_add_local(newinfo, pc->s.index, pc->s.r, pc->s.a0, &pcnew);
     }
     /* If we've still failed, then we need to stop under control */
     if (pcnew == NULL) {
@@ -309,7 +310,7 @@ int colloids_info_recreate(const colloid_options_t * newopts,
     }
     pcnew->s = pc->s;
 
-    create_links_arrays(newinfo, pcnew);
+    //create_links_arrays(newinfo, pcnew);
   }
 
   copy_colloids_array_info(oldinfo, newinfo);
@@ -954,7 +955,7 @@ __host__ int colloids_info_update_cell_list(colloids_info_t * cinfo) {
  *****************************************************************************/
 
 __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
-			    const double r[3], colloid_t ** pc) {
+			    const double r[3], double a0, colloid_t ** pc) {
   int is_local = 1;
   int icell[3];
 
@@ -970,7 +971,14 @@ __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
   if (icell[Z] < 1 || icell[Z] > cinfo->ncell[Z]) is_local = 0;
 
   *pc = NULL;
-  if (is_local) colloids_info_add(cinfo, index, r, pc);
+  //if (is_local) colloids_info_add(cinfo, index, r, pc);
+  if (is_local) {
+    colloids_info_add(cinfo, index, r, a0, pc);
+    if (!(*pc)->linkrb) {
+      printf("colloids.c colloid links array not initialised. aborting");
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+  } 
 
   return 0;
 }
@@ -989,7 +997,7 @@ int colloids_info_add_state_local(colloids_info_t * info,
   int ifail = 0;
   colloid_t * pc = NULL;
 
-  ifail = colloids_info_add_local(info, state->index, state->r, &pc);
+  ifail = colloids_info_add_local(info, state->index, state->r, state->a0, &pc);
   if (state->index < 1) ifail = -1;
   if (pc) pc->s = *state;
 
@@ -1005,7 +1013,7 @@ int colloids_info_add_state_local(colloids_info_t * info,
  *****************************************************************************/
 
 __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
-				     const double r[3], colloid_t ** pc) {
+				     const double r[3], double a0, colloid_t ** pc) {
 
   int icell[3];
 
@@ -1021,7 +1029,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
   assert(icell[Y] < cinfo->ncell[Y] + 2*cinfo->nhalo);
   assert(icell[Z] < cinfo->ncell[Z] + 2*cinfo->nhalo);
 
-  colloid_create(cinfo, pc);
+  colloid_create(cinfo, a0, pc);
   (*pc)->s.index = index;
 
   (*pc)->s.r[X] = r[X];
@@ -1045,7 +1053,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
  *
  *****************************************************************************/
 
-__host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
+__host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc) {
 
   colloid_state_t s = {0};
   colloid_t * obj = NULL;
@@ -1062,6 +1070,15 @@ __host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
 
   cinfo->nallocated += 1;
   *pc = obj;
+
+  (*pc)->s.a0 = a0;
+
+  create_links_arrays(cinfo, *pc);
+  assert((*pc)->linkrb);
+  if (!(*pc)->linkrb) {
+    printf("2 colloids.c colloid links array not initialised. aborting");
+    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+  }
 
   return 0;
 }
@@ -1809,8 +1826,6 @@ void colloids_array_check(colloids_info_t *cinfo) {
   colloid_t *pc = cinfo->headall;
   int i = 0;
   for (; pc; pc = pc->nextall) {
-    if (pc->s.index != cinfo->colloid_array.colloids[i]->s.index)
-      printf("i %d list index %d array index %d\n", i, pc->s.index, cinfo->colloid_array.colloids[i]->s.index);
     assert(pc->s.index == cinfo->colloid_array.colloids[i]->s.index);
     assert(pc->s.r[0] == cinfo->colloid_array.colloids[i]->s.r[0]);
     assert(pc->s.r[1] == cinfo->colloid_array.colloids[i]->s.r[1]);

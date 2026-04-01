@@ -173,9 +173,9 @@ __host__ int colloids_info_cell_list_head(colloids_info_t * info,
 __host__ int colloids_info_cell_coords(colloids_info_t * cinfo, const double r[3],
 			      int icell[3]);
 __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
-			    const double r[3], colloid_t ** pc);
+			    const double r[3], double a0, colloid_t ** pc);
 __host__ int colloids_info_add(colloids_info_t * confo, int index, const double r[3],
-		      colloid_t ** pc);
+		      double a0, colloid_t ** pc);
 __host__ int colloids_info_update_cell_list(colloids_info_t * cinfo);
 __host__ int colloids_info_q_local(colloids_info_t * cinfo, double q[2]);
 __host__ int colloids_info_v_local(colloids_info_t * cinfo, double * v);
