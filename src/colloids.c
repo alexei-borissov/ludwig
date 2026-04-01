@@ -309,8 +309,6 @@ int colloids_info_recreate(const colloid_options_t * newopts,
       pe_fatal(oldinfo->pe, "Colloid position causes cell list failure\n");
     }
     pcnew->s = pc->s;
-
-    //create_links_arrays(newinfo, pcnew);
   }
 
   copy_colloids_array_info(oldinfo, newinfo);
@@ -971,14 +969,7 @@ __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
   if (icell[Z] < 1 || icell[Z] > cinfo->ncell[Z]) is_local = 0;
 
   *pc = NULL;
-  //if (is_local) colloids_info_add(cinfo, index, r, pc);
-  if (is_local) {
-    colloids_info_add(cinfo, index, r, a0, pc);
-    if (!(*pc)->linkrb) {
-      printf("colloids.c colloid links array not initialised. aborting");
-      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-    }
-  } 
+  if (is_local) colloids_info_add(cinfo, index, r, a0, pc);
 
   return 0;
 }
@@ -1074,11 +1065,6 @@ __host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc)
   (*pc)->s.a0 = a0;
 
   create_links_arrays(cinfo, *pc);
-  assert((*pc)->linkrb);
-  if (!(*pc)->linkrb) {
-    printf("2 colloids.c colloid links array not initialised. aborting");
-    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-  }
 
   return 0;
 }
