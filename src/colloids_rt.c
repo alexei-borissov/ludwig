@@ -238,7 +238,7 @@ int colloids_rt_dynamics(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
   /* Assume there are always fully-resolved particles */
 
-  build_update_map_links_arrays(cs, cinfo, map);
+  build_update_map_links_arrays(cinfo, map);
   build_update_links_arrays(cs, cinfo, wall, map, model);
   colloids_memcpy(cinfo, tdpMemcpyHostToDevice);
 
