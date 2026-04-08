@@ -35,7 +35,7 @@
 #include "bbl.h"
 #include "colloid.h"
 #include "colloids.h"
-#include "build_links_arrays.h"
+#include "build.h"
 
 void handler(int sig) {
     printf("%s:%d Floating Point Exception\n", __FILE__, __LINE__);
@@ -1658,10 +1658,10 @@ __global__ void bbl_pass2_kernel(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo
         }
       }
 
-	  tdpAtomicAddDouble(&pc->s.deltaphi, pc_s_deltaphi_total);
+	  atomicAdd(&pc->s.deltaphi, pc_s_deltaphi_total);
       for (int ix = 0; ix < 3; ix++) {
         for (ia = 0; ia < 3; ia++) {
-          tdpAtomicAddDouble(&bbl->stress[ia][ix], bbl_stress_total[ia][ix]);
+          atomicAdd(&bbl->stress[ia][ix], bbl_stress_total[ia][ix]);
         }
       }
     }

@@ -44,7 +44,6 @@
 #include "colloids_rt.h"
 
 #include "build.h"
-#include "build_links_arrays.h"
 
 int lubrication_init(pe_t * pe, cs_t * cs, rt_t * rt, interact_t * inter);
 int pair_ss_cut_init(pe_t * pe, cs_t * cs, rt_t * rt, interact_t * inter);
@@ -238,8 +237,8 @@ int colloids_rt_dynamics(cs_t * cs, colloids_info_t * cinfo, wall_t * wall,
 
   /* Assume there are always fully-resolved particles */
 
-  build_update_map_links_arrays(cinfo, map);
-  build_update_links_arrays(cs, cinfo, wall, map, model);
+  build_update_map(cinfo, map);
+  build_update_links(cs, cinfo, wall, map, model);
   colloids_memcpy(cinfo, tdpMemcpyHostToDevice);
 
   return 0;

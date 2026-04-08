@@ -86,7 +86,6 @@
 #include "colloids_file_io.h"
 #include "colloids_halo.h"
 #include "build.h"
-#include "build_links_arrays.h"
 #include "subgrid.h"
 #include "colloids.h"
 #include "advection_rt.h"
@@ -2190,17 +2189,17 @@ int ludwig_colloids_update(ludwig_t * ludwig) {
 
   TIMER_start(TIMER_REBUILD);
 
-  build_update_map_links_arrays(ludwig->collinfo, ludwig->map);
+  build_update_map(ludwig->collinfo, ludwig->map);
   build_remove_replace(ludwig->fe, ludwig->collinfo, ludwig->lb, ludwig->phi,
 		       ludwig->q, ludwig->psi, ludwig->map);
-  build_update_links_arrays(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
+  build_update_links(ludwig->cs, ludwig->collinfo, ludwig->wall, ludwig->map,
 		     &ludwig->lb->model);
 
   TIMER_stop(TIMER_REBUILD);
 
   if (iconserve) {
     colloid_sums_halo(ludwig->collinfo, COLLOID_SUM_CONSERVATION);
-    build_conservation_links_arrays(ludwig->collinfo, ludwig->phi, ludwig->psi,
+    build_conservation(ludwig->collinfo, ludwig->phi, ludwig->psi,
 		       &ludwig->lb->model);
   }
 
