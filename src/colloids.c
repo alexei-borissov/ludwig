@@ -27,6 +27,8 @@
 #include "util_ellipsoid.h"
 #include "colloids.h"
 
+#define N_LINKS 2500 /* Max number of links per colloid, for debugging */
+
 __host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc);
 __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
 void colloid_free_links_arrays(colloid_t * pc);
@@ -1014,7 +1016,10 @@ __host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc)
 
   (*pc)->s.a0 = a0;
 
-  create_links_arrays(cinfo, *pc);
+  // Commented for debugging. uncomment when we are sure this is working.
+  //create_links_arrays(cinfo, *pc);
+  (*pc)->max_links = N_LINKS;
+  (*pc)->active_links = N_LINKS;
 
   return 0;
 }
@@ -1030,7 +1035,8 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc) {
   assert(cinfo);
   assert(pc);
 
-  colloid_free_links_arrays(pc);
+  // Commented for debugging. uncomment when we are sure this is working.
+  //colloid_free_links_arrays(pc);
   tdpAssert(tdpFree(pc));
 
   cinfo->nallocated -= 1;
@@ -1796,4 +1802,21 @@ void colloid_free_links_arrays(colloid_t * pc) {
     tdpAssert( tdpFree(pc->link_status) );
     tdpAssert( tdpFree(pc->linkrb) );
   }
+}
+
+int test_colloid_links_array_allocation(colloids_info_t * cinfo) {
+  // Loop over each colloid and check that the links arrays are allocated by checking link_status pointer.
+  colloid_t * pc;
+  int count = 0;
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
+    assert(pc->link_status != NULL);
+
+    for (int link_index = 0; link_index < pc->active_links; link_index++) {
+      if (pc->link_status[link_index] == LINK_UNUSED) continue;
+      count++;
+    }
+  }
+  
+  return count;
 }

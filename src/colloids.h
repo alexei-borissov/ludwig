@@ -22,6 +22,9 @@
 #include "colloid_link.h"
 #include "colloid_options.h"
 
+// debugging, max number of links
+#define N_LINKS 2500 
+
 /* Auxiliary for diagnostic quantities (for output) */
 
 typedef struct colloid_diagnostic_s colloid_diagnostic_t;
@@ -91,13 +94,21 @@ struct colloid {
 
   colloid_t * bonded[NBOND_MAX];
 
+  //int max_links;              /* Max number of links for given colloid */
+  //int active_links;           /* Actual number of links */
+  //int * linki;                /* Array of outside (fluid) site indices */
+  //int * linkj;                /* Array of inside (solid) site indices */
+  //int * linkp;                /* Array of LB basis vectors for links */
+  //int * link_status;          /* Array of link statuses */
+  //double ** linkrb;           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
+  
   int max_links;              /* Max number of links for given colloid */
   int active_links;           /* Actual number of links */
-  int * linki;                /* Array of outside (fluid) site indices */
-  int * linkj;                /* Array of inside (solid) site indices */
-  int * linkp;                /* Array of LB basis vectors for links */
-  int * link_status;          /* Array of link statuses */
-  double ** linkrb;           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
+  int linki[N_LINKS];                /* Array of outside (fluid) site indices */
+  int linkj[N_LINKS];                /* Array of inside (solid) site indices */
+  int linkp[N_LINKS];                /* Array of LB basis vectors for links */
+  int link_status[N_LINKS];          /* Array of link statuses */
+  double linkrb[N_LINKS][3];           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
 };
 
 typedef struct colloids_arrays_s colloids_arrays_t;
@@ -214,6 +225,7 @@ __host__ void colloids_array_check(colloids_info_t * cinfo);
 
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
 void test_colloid_links_arrays(colloids_info_t *cinfo);
+int test_colloid_links_array_allocation(colloids_info_t * cinfo);
 
 
 int colloids_info_add_state_local(colloids_info_t * info,

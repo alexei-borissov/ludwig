@@ -203,8 +203,8 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
   cs_nlocal_offset(cs, offset);
 
   /* Failsafe approach: set all links to unused status */
-  for (int i = 0; i < p_colloid->max_links; i++) {
-    p_colloid->link_status[i] = LINK_UNUSED;
+  for (int link_index = 0; link_index < p_colloid->max_links; link_index++) {
+    p_colloid->link_status[link_index] = LINK_UNUSED;
   }
   /* ... end failsafe */
 
@@ -334,7 +334,7 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
 
   for (int link_index = 0; link_index < p_colloid->active_links; link_index++) {
 
-    if (p_colloid->link_status == LINK_UNUSED) {
+    if (p_colloid->link_status[link_index] == LINK_UNUSED) {
       /* Link is not active */
     }
     else {
@@ -358,7 +358,7 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
 
       if (status == MAP_FLUID) {
 	int p = p_colloid->linkp[link_index];
-	p_colloid->link_status = LINK_FLUID;
+	p_colloid->link_status[link_index] = LINK_FLUID;
 	build_link_mean(p_colloid, model->wv[p], model->cv[p], p_colloid->linkrb[link_index]);
       }
       else {

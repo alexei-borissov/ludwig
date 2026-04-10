@@ -174,14 +174,12 @@ __host__ int pth_force_driver(pth_t * pth, colloids_info_t * cinfo,
 
 
   colloid_t * pc;
-  colloid_link_t * p_link;
 
   /* All colloids, including halo */
   colloids_info_all_head(cinfo, &pc);
 
   for ( ; pc; pc = pc->nextall) {
 
-    p_link = pc->lnk;
     for (int link_index = 0; link_index < pc->active_links; link_index++) {
     
       if (pc->link_status[link_index] == LINK_FLUID) {
