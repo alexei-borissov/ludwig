@@ -19,8 +19,12 @@
 
 #include "coords.h"
 #include "colloid.h"
-#include "colloid_link.h"
 #include "colloid_options.h"
+
+typedef struct colloid colloid_t;
+typedef struct colloids_info_s colloids_info_t;
+
+#include "colloid_link.h"
 
 /* Auxiliary for diagnostic quantities (for output) */
 
@@ -47,7 +51,6 @@ struct colloid_diagnostic_s {
 
 /* Colloid structure */
 
-typedef struct colloid colloid_t;
 
 struct colloid {
 
@@ -91,13 +94,7 @@ struct colloid {
 
   colloid_t * bonded[NBOND_MAX];
 
-  int max_links;              /* Max number of links for given colloid */
-  int active_links;           /* Actual number of links */
-  int * linki;                /* Array of outside (fluid) site indices */
-  int * linkj;                /* Array of inside (solid) site indices */
-  int * linkp;                /* Array of LB basis vectors for links */
-  int * link_status;          /* Array of link statuses */
-  double ** linkrb;           /* Array of vectors connecting centre of colloid and centre of the boundary link*/
+  colloid_links_array_t * links; /* Arrays of links for this colloid. */ // XXX: Check that this is copied between host and device versions correctly.
 };
 
 typedef struct colloids_arrays_s colloids_arrays_t;
@@ -107,8 +104,6 @@ struct colloids_arrays_s {
     int max_colloids;
     colloid_t ** colloids;
 };
-
-typedef struct colloids_info_s colloids_info_t;
 
 struct colloids_info_s {
 

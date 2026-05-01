@@ -26,8 +26,9 @@
 #include "util_vector.h"
 #include "util_ellipsoid.h"
 #include "colloids.h"
+#include "colloid_link.h"
 
-__host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc);
+__host__ int colloid_create(colloids_info_t * cinfo, const double a0, colloid_t ** pc);
 __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
 void colloid_free_links_arrays(colloid_t * pc);
 
@@ -1004,7 +1005,7 @@ int colloids_info_add_state_local(colloids_info_t * info,
  *****************************************************************************/
 
 __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
-				     const double r[3], double a0, colloid_t ** pc) {
+				     const double r[3], const double a0, colloid_t ** pc) {
 
   int icell[3];
 
@@ -1044,7 +1045,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
  *
  *****************************************************************************/
 
-__host__ int colloid_create(colloids_info_t * cinfo, double a0, colloid_t ** pc) {
+__host__ int colloid_create(colloids_info_t * cinfo, const double a0, colloid_t ** pc) {
 
   colloid_state_t s = {0};
   colloid_t * obj = NULL;
@@ -1820,30 +1821,41 @@ void colloids_array_check(colloids_info_t *cinfo) {
   }
 }
 
+/**
+ * create_links_arrays
+ * 
+ * Allocate the arrays of links for a colloid assuming the max number of links determined by the colloid radius
+ * 
+ */
 void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
-  pc->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
-  tdpAssert(tdpMallocManaged((void **) &pc->linki, pc->max_links*sizeof(int), tdpMemAttachGlobal));
-  tdpAssert(tdpMallocManaged((void **) &pc->linkj, pc->max_links*sizeof(int), tdpMemAttachGlobal));
-  tdpAssert(tdpMallocManaged((void **) &pc->linkp, pc->max_links*sizeof(int), tdpMemAttachGlobal));
-  tdpAssert(tdpMallocManaged((void **) &pc->link_status, pc->max_links*sizeof(int), tdpMemAttachGlobal));
-  tdpAssert(tdpMallocManaged((void **) &pc->linkrb, pc->max_links*sizeof(double *), tdpMemAttachGlobal));
-  for (int i = 0; i < pc->max_links; i++) {
-    tdpAssert(tdpMallocManaged((void **) &pc->linkrb[i], 3*sizeof(double), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links, sizeof(colloid_links_array_t), tdpMemAttachGlobal));
+  pc->links->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
+  tdpAssert(tdpMallocManaged((void **) &pc->links->i, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->j, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->p, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->status, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->rb, pc->links->max_links*sizeof(double *), tdpMemAttachGlobal));
+  for (int i = 0; i < pc->links->max_links; i++) {
+    tdpAssert(tdpMallocManaged((void **) &pc->links->rb[i], 3*sizeof(double), tdpMemAttachGlobal)); // XXX: change order to reduce number of managed allocations.
     for (int j = 0; j < 3; j++) 
-      pc->linkrb[i][j] = 0.0;
+      pc->links->rb[i][j] = 0.0;
   }
-  for (int i = 0; i < pc->max_links; i++) pc->linki[i] = 0;
-  for (int i = 0; i < pc->max_links; i++) pc->linkj[i] = 0;
-  for (int i = 0; i < pc->max_links; i++) pc->linkp[i] = 0;
-  for (int i = 0; i < pc->max_links; i++) pc->link_status[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->i[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->j[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->p[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->status[i] = 0;
 }
 
+/**
+ * Free the links arrays
+ */
 void colloid_free_links_arrays(colloid_t * pc) {
-  if (pc->linki) {
-    tdpAssert( tdpFree(pc->linki) );
-    tdpAssert( tdpFree(pc->linkj) );
-    tdpAssert( tdpFree(pc->linkp) );
-    tdpAssert( tdpFree(pc->link_status) );
-    tdpAssert( tdpFree(pc->linkrb) );
+  if (pc->links) {
+    tdpAssert( tdpFree(pc->links->i) );
+    tdpAssert( tdpFree(pc->links->j) );
+    tdpAssert( tdpFree(pc->links->p) );
+    tdpAssert( tdpFree(pc->links->status) );
+    tdpAssert( tdpFree(pc->links->rb) );
+    tdpAssert( tdpFree(pc->links) );
   }
 }

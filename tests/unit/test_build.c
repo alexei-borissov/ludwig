@@ -241,7 +241,7 @@ static int test_build_update_map_ell(pe_t * pe, cs_t * cs, const double abc[3],
                          .elabc   = {abc[X], abc[Y], abc[Z]},
                          .quat    = {q[0], q[1], q[2], q[3]}
     };
-    colloids_info_add_local(cinfo, 1, r0, 0, &pc);
+    colloids_info_add_local(cinfo, 1, r0, 0.0, &pc);
     if (pc) pc->s = s;
   }
 
@@ -334,8 +334,7 @@ static int test_build_update_links_sph(pe_t * pe, cs_t * cs, double a0,
     /* Remember to run through all halo images ... */
     colloids_info_all_head(cinfo, &pc);
     for (; pc; pc = pc->nextall) {
-      colloid_link_t * link = pc->lnk;
-      nlink += pc->active_links;
+      nlink += pc->links->active_links;
     }
 
     /* All ranks check */
