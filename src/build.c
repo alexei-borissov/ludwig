@@ -192,8 +192,6 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
   int ntotal[3];
   int offset[3];
 
-  int link_index;
-
   double   largestdimn;
 
   colloid_t * pc = NULL;
@@ -324,8 +322,6 @@ int build_reset_links(cs_t * cs, colloid_t * p_colloid, map_t * map,
   double      r0[3];
   int         offset[3];
   int status;
-  int link_index;
-
   double      lambda = 0.5;
 
   assert(p_colloid);
@@ -997,7 +993,7 @@ int build_colloid_wall_links(cs_t * cs, colloids_info_t * cinfo,
  *****************************************************************************/
 
 int build_count_links_local(colloid_t * colloid, int * nlinks) {
-  return colloid->active_links;
+  return colloid->links->active_links;
 }
 
 /*****************************************************************************

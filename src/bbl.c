@@ -315,19 +315,6 @@ static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 
     pc->sump /= pc->sumw;
 
-<<<<<<< HEAD
-    for (int i = 0; i < pc->active_links; i++) {
-
-      if (pc->link_status[i] != LINK_FLUID) continue;
-
-      dm = -lb->model.wv[pc->linkp[i]]*pc->sump;
-
-      for (ia = 0; ia < 3; ia++) {
-	      c[ia] = 1.0*lb->model.cv[pc->linkp[i]][ia];
-      }
-
-      cross_product(pc->linkrb[i], c, rbxc);
-=======
 	  for (int link_index = 0; link_index < pc->links->active_links; link_index++) {
 
       if (pc->links->status[link_index] != LINK_FLUID) continue;
@@ -339,7 +326,6 @@ static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
       }
 
       cross_product(pc->links->rb[link_index], c, rbxc);
->>>>>>> 18ea345d16a600c75c433b48eed5ad23a388d5f6
 
       for (ia = 0; ia < 3; ia++) {
 	pc->fc0[ia] += dm*c[ia];
@@ -551,12 +537,7 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	  
     /* Sum over the links */
 
-<<<<<<< HEAD
-    printf("pc %d active links %d \n", colloid_index, pc->active_links);
-    for (int link_index = 0; link_index < pc->active_links; link_index++) {
-=======
 	  for (int link_index = 0; link_index < pc->links->active_links; link_index++) {
->>>>>>> 18ea345d16a600c75c433b48eed5ad23a388d5f6
 
       if (pc->links->status[link_index] == LINK_UNUSED) continue;
 
@@ -1128,174 +1109,6 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   }
 }
 
-<<<<<<< HEAD
-=======
-static int bbl_pass2_orig(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
-
-  int i, j, ij, ji;
-  int ia;
-  int ndist;
-
-  double dm;
-  double vdotc;
-  double dms;
-  double df, dg;
-  double fdist;
-  double wxrb[3];
-
-  double dgtm1;
-  double rho0;
-  LB_RCS2_DOUBLE(rcs2);
-
-  physics_t * phys = NULL;
-  colloid_t * pc = NULL;
-
-
-  assert(bbl);
-  assert(lb);
-  assert(cinfo);
-
-  physics_ref(&phys);
-  physics_rho0(phys, &rho0);
-
-  ndist=lb->ndist;
-
-  /* Account the current phi deficit */
-  bbl->deltag = 0.0;
-
-  /* Zero the surface stress */
-
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
-      bbl->stress[i][j] = 0.0;
-    }
-  }
-
-  /* All colloids, including halo */
-
-  colloids_info_all_head(cinfo, &pc);
-
-  for ( ; pc; pc = pc->nextall) {
-
-    if (pc->s.bc != COLLOID_BC_BBL) continue;
-
-    /* Set correction for phi arising from previous step */
-
-    dgtm1 = pc->s.deltaphi;
-    pc->s.deltaphi = 0.0;
-
-    /* Correction to the bounce-back for this particle if it is
-     * without full complement of links */
-
-    dms = 0.0;
-
-    for (ia = 0; ia < 3; ia++) {
-      dms += pc->s.v[ia]*pc->cbar[ia];
-      dms += pc->s.w[ia]*pc->rxcbar[ia];
-    }
-
-    dms = 2.0*rcs2*rho0*dms;
-
-    /* Run through the links */
-
-	  for(int link_index = 0; link_index < pc->links->active_links; link_index++) {
-
-      i = pc->links->i[link_index];              /* index site i (outside) */
-      j = pc->links->j[link_index];              /* index site j (inside) */
-      ij = pc->links->p[link_index];             /* link velocity index i->j */
-      ji = lb->model.nvel - ij;   /* link velocity index j->i */
-
-      if (pc->links->status[link_index] == LINK_FLUID) {
-
-	lb_f(lb, i, ij, 0, &fdist);
-	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
-
-	/* Compute the self-consistent boundary velocity,
-	 * and add the correction term for changes in shape. */
-
-	cross_product(pc->s.w, pc->links->rb[link_index], wxrb);
-
-	vdotc = 0.0;
-	for (ia = 0; ia < 3; ia++) {
-	  vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
-	}
-	vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
-	df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
-
-	/* Contribution to mass conservation from squirmer */
-
-	df += lb->model.wv[ij]*pc->sump;
-
-	/* Correction owing to missing links "squeeze term" */
-
-	df -= lb->model.wv[ij]*dms;
-
-	/* The outside site actually undergoes BBL. */
-
-	lb_f(lb, i, ij, LB_RHO, &fdist);
-	fdist = fdist - df;
-	lb_f_set(lb, j, ji, LB_RHO, fdist);
-
-	/* This is slightly clunky. If the order parameter is
-	 * via LB, bounce back with correction. */
-
-	if (ndist > 1) {
-	  lb_0th_moment(lb, i, LB_PHI, &dg);
-	  dg *= vdotc;
-	  pc->s.deltaphi += dg;
-	  dg -= lb->model.wv[ij]*dgtm1;
-
-	  lb_f(lb, i, ij, LB_PHI, &fdist);
-	  fdist = fdist - dg;
-	  lb_f_set(lb, j, ji, LB_PHI, fdist);
-	}
-
-	/* The stress is r_b f_b */
-	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += pc->links->rb[link_index][X]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += pc->links->rb[link_index][Y]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += pc->links->rb[link_index][Z]*(dm - df)*lb->model.cv[ij][ia];
-	}
-      }
-      else if (pc->links->status[link_index] == LINK_COLLOID) {
-
-	/* The stress should include the solid->solid term */
-
-	lb_f(lb, i, ij, 0, &fdist);
-	dm = fdist;
-	lb_f(lb, j, ji, 0, &fdist);
-	dm += fdist;
-
-	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += pc->links->rb[link_index][X]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += pc->links->rb[link_index][Y]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += pc->links->rb[link_index][Z]*dm*lb->model.cv[ij][ia];
-	}
-      }
-      /* Next link */
-    }
-
-    /* Reset factors required for change of shape, etc */
-
-    pc->deltam = 0.0;
-    pc->sump = 0.0;
-
-    for (ia = 0; ia < 3; ia++) {
-      pc->f0[ia] = 0.0;
-      pc->t0[ia] = 0.0;
-      pc->fc0[ia] = 0.0;
-      pc->tc0[ia] = 0.0;
-    }
-
-    bbl->deltag += pc->s.deltaphi;
-  }
-
-
-  return 0;
-}
-
-
->>>>>>> 18ea345d16a600c75c433b48eed5ad23a388d5f6
 /*****************************************************************************
  *
  *  bbl_pass2
@@ -1379,13 +1192,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     /* Run through the links */
 
-<<<<<<< HEAD
-    for (int link_index = 0; link_index < pc->active_links; link_index++) {
-=======
-    p_link = pc->lnk;
-
     for (int link_index = 0; link_index < pc->links->active_links; link_index++) {
->>>>>>> 18ea345d16a600c75c433b48eed5ad23a388d5f6
 
       i = pc->links->i[link_index];              /* index site i (outside) */
       j = pc->links->j[link_index];              /* index site j (inside) */

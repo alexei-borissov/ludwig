@@ -1016,9 +1016,9 @@ __host__ int colloid_create(colloids_info_t * cinfo, const double a0, colloid_t 
   (*pc)->s.a0 = a0;
 
   // Commented for debugging. uncomment when we are sure this is working.
-  //create_links_arrays(cinfo, *pc);
-  (*pc)->max_links = N_LINKS;
-  (*pc)->active_links = N_LINKS;
+  create_links_arrays(cinfo, *pc);
+  //(*pc)->links->max_links = N_LINKS;
+  //(*pc)->links->active_links = N_LINKS;
 
   return 0;
 }
@@ -1820,10 +1820,10 @@ int test_colloid_links_array_allocation(colloids_info_t * cinfo) {
   int count = 0;
   for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
     pc = cinfo->colloid_array.colloids[colloid_index];
-    assert(pc->link_status != NULL);
+    assert(pc->links->status != NULL);
 
-    for (int link_index = 0; link_index < pc->active_links; link_index++) {
-      if (pc->link_status[link_index] == LINK_UNUSED) continue;
+    for (int link_index = 0; link_index < pc->links->active_links; link_index++) {
+      if (pc->links->status[link_index] == LINK_UNUSED) continue;
       count++;
     }
   }
