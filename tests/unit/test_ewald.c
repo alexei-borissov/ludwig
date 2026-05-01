@@ -49,6 +49,7 @@ int test_ewald_suite(void) {
   double eself;
   double kappa;
   double ltot[3];
+  double a0 = 2.3;
 
   colloid_t * p_c1;
   colloid_t * p_c2;
@@ -97,8 +98,6 @@ int test_ewald_suite(void) {
   r2[Y] = 3.0;
   r2[Z] = 13.0;
 
-  double a0 = 2.3; 
-
   colloids_info_add_local(cinfo, 1, r1, a0, &p_c1);
   colloids_info_add_local(cinfo, 2, r2, a0, &p_c2);
   assert(p_c1 != NULL);
@@ -118,8 +117,8 @@ int test_ewald_suite(void) {
 
   /* Second colloid ... */
 
-  p_c2->s.a0 = 2.3;
-  p_c2->s.ah = 2.3;
+  p_c2->s.a0 = a0;
+  p_c2->s.ah = a0;
 
   p_c2->s.s[X] = 0.0;
   p_c2->s.s[Y] = 0.0;
