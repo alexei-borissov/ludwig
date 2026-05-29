@@ -279,17 +279,15 @@ int build_reconstruct_links(cs_t * cs, colloids_info_t * cinfo,
 	  }
     link_index++;
 
-    link_index++;
-
 	  /* Next lattice vector */
 	}
-  p_colloid->links->active_links = link_index;
-  assert(p_colloid->links->active_links <= p_colloid->links->max_links);
 
 	/* Next site in the cube */
       }
     }
   }
+  p_colloid->links->active_links = link_index;
+  assert(p_colloid->links->active_links <= p_colloid->links->max_links);
 
   return 0;
 }
