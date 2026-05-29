@@ -26,9 +26,11 @@
 #include "util_vector.h"
 #include "util_ellipsoid.h"
 #include "colloids.h"
+#include "colloid_link.h"
 
-__host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc);
+__host__ int colloid_create(colloids_info_t * cinfo, const double a0, colloid_t ** pc);
 __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc);
+void colloid_free_links_arrays(colloid_t * pc);
 
 /*****************************************************************************
  *
@@ -48,6 +50,18 @@ int colloids_info_create(pe_t * pe, cs_t * cs, const colloid_options_t * opts,
 
   obj = (colloids_info_t *) calloc(1, sizeof(colloids_info_t));
   if (obj == NULL) goto err;
+
+  int ndevice;
+  tdpAssert( tdpGetDeviceCount(&ndevice) );
+
+  if (ndevice == 0) {
+    obj->target = obj;
+  }
+  else {
+    tdpAssert(tdpMallocManaged((void**) &(obj->target), sizeof(colloids_info_t), tdpMemAttachGlobal));
+    tdpAssert(tdpMemset(obj->target, 0, sizeof(colloids_info_t)));
+  }
+
   if (colloids_info_initialise(pe, cs, opts, obj) != 0) goto err;
 
   *info = obj;
@@ -228,6 +242,7 @@ int colloids_info_finalise(colloids_info_t * info) {
       tdpAssert( tdpFree(info->target) );
     }
   }
+  colloids_array_free(&info->colloid_array);
 
   *info = (colloids_info_t) {0};
 
@@ -280,14 +295,14 @@ int colloids_info_recreate(const colloid_options_t * newopts,
   /* Need to copy all colloid state across */
 
   for ( ; pc; pc = pc->nextlocal) {
-    colloids_info_add_local(newinfo, pc->s.index, pc->s.r, &pcnew);
+    colloids_info_add_local(newinfo, pc->s.index, pc->s.r, pc->s.a0, &pcnew);
     if (pcnew == NULL) {
       /* We have dropped a colloid, probably at the new cell list boundary;
        * try adjusting the position by a small amount... */
       pc->s.r[X] += DBL_EPSILON*pc->s.r[X];
       pc->s.r[Y] += DBL_EPSILON*pc->s.r[Y];
       pc->s.r[Z] += DBL_EPSILON*pc->s.r[Z];
-      colloids_info_add_local(newinfo, pc->s.index, pc->s.r, &pcnew);
+      colloids_info_add_local(newinfo, pc->s.index, pc->s.r, pc->s.a0, &pcnew);
     }
     /* If we've still failed, then we need to stop under control */
     if (pcnew == NULL) {
@@ -296,6 +311,8 @@ int colloids_info_recreate(const colloid_options_t * newopts,
     }
     pcnew->s = pc->s;
   }
+
+  copy_colloids_array_info(oldinfo, newinfo);
 
   colloids_info_ntotal_set(newinfo);
   assert(newinfo->ntotal == (*pinfo)->ntotal);
@@ -581,6 +598,39 @@ __host__ int colloids_info_nlocal(colloids_info_t * cinfo, int * nlocal) {
 
 /*****************************************************************************
  *
+ *  colloids_info_nall
+ *
+ *  Return the number of local and halo colloids. As the colloids move about,
+ *  this must be recomputed each time.
+ *
+ ****************************************************************************/
+
+__host__ int colloids_info_nall(colloids_info_t * cinfo, int * nall) {
+
+  int ic, jc, kc;
+  colloid_t * pc = NULL;
+
+  assert(cinfo);
+  assert(nall);
+
+  *nall = 0;
+
+  for (ic = 0; ic <= cinfo->ncell[X]+1; ic++) {
+    for (jc = 0; jc <= cinfo->ncell[Y]+1; jc++) {
+      for (kc = 0; kc <= cinfo->ncell[Z]+1; kc++) {
+
+	colloids_info_cell_list_head(cinfo, ic, jc, kc, &pc);
+	for (; pc; pc = pc->next) *nall += 1;
+
+      }
+    }
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
  *  colloids_info_ntotal_set
  *
  *  Set the global number of colloids from the current list.
@@ -604,7 +654,7 @@ __host__ int colloids_info_ntotal_set(colloids_info_t * cinfo) {
 
 /*****************************************************************************
  *
- *  colloids_info_cell_list_head
+ *  Colloids_info_cell_list_head
  *
  *****************************************************************************/
 
@@ -854,7 +904,7 @@ __host__ int colloids_info_update_cell_list(colloids_info_t * cinfo) {
  *****************************************************************************/
 
 __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
-			    const double r[3], colloid_t ** pc) {
+			    const double r[3], double a0, colloid_t ** pc) {
   int is_local = 1;
   int icell[3];
 
@@ -870,7 +920,7 @@ __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
   if (icell[Z] < 1 || icell[Z] > cinfo->ncell[Z]) is_local = 0;
 
   *pc = NULL;
-  if (is_local) colloids_info_add(cinfo, index, r, pc);
+  if (is_local) colloids_info_add(cinfo, index, r, a0, pc);
 
   return 0;
 }
@@ -889,7 +939,7 @@ int colloids_info_add_state_local(colloids_info_t * info,
   int ifail = 0;
   colloid_t * pc = NULL;
 
-  ifail = colloids_info_add_local(info, state->index, state->r, &pc);
+  ifail = colloids_info_add_local(info, state->index, state->r, state->a0, &pc);
   if (state->index < 1) ifail = -1;
   if (pc) pc->s = *state;
 
@@ -905,7 +955,7 @@ int colloids_info_add_state_local(colloids_info_t * info,
  *****************************************************************************/
 
 __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
-				     const double r[3], colloid_t ** pc) {
+				     const double r[3], const double a0, colloid_t ** pc) {
 
   int icell[3];
 
@@ -921,7 +971,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
   assert(icell[Y] < cinfo->ncell[Y] + 2*cinfo->nhalo);
   assert(icell[Z] < cinfo->ncell[Z] + 2*cinfo->nhalo);
 
-  colloid_create(cinfo, pc);
+  colloid_create(cinfo, a0, pc);
   (*pc)->s.index = index;
 
   (*pc)->s.r[X] = r[X];
@@ -931,7 +981,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
   (*pc)->s.rebuild = 1;
 
   colloids_info_insert_colloid(cinfo, *pc);
-
+  
   return 0;
 }
 
@@ -945,7 +995,7 @@ __host__ int colloids_info_add(colloids_info_t * cinfo, int index,
  *
  *****************************************************************************/
 
-__host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
+__host__ int colloid_create(colloids_info_t * cinfo, const double a0, colloid_t ** pc) {
 
   colloid_state_t s = {0};
   colloid_t * obj = NULL;
@@ -963,6 +1013,13 @@ __host__ int colloid_create(colloids_info_t * cinfo, colloid_t ** pc) {
   cinfo->nallocated += 1;
   *pc = obj;
 
+  (*pc)->s.a0 = a0;
+
+  // Commented for debugging. uncomment when we are sure this is working.
+  create_links_arrays(cinfo, *pc);
+  //(*pc)->links->max_links = N_LINKS;
+  //(*pc)->links->active_links = N_LINKS;
+
   return 0;
 }
 
@@ -977,7 +1034,8 @@ __host__ void colloid_free(colloids_info_t * cinfo, colloid_t * pc) {
   assert(cinfo);
   assert(pc);
 
-  colloid_link_free_list(pc->lnk);
+  // Commented for debugging. uncomment when we are sure this is working.
+  //colloid_free_links_arrays(pc);
   tdpAssert(tdpFree(pc));
 
   cinfo->nallocated -= 1;
@@ -1108,7 +1166,7 @@ int colloids_info_local_head(colloids_info_t * cinfo, colloid_t ** pc) {
  *
  *****************************************************************************/
 
-__host__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc) {
+__host__ __device__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc) {
 
   assert(cinfo);
   assert(pc);
@@ -1192,6 +1250,7 @@ __host__ int colloids_info_update_lists(colloids_info_t * cinfo) {
 
   colloids_info_list_local_build(cinfo);
   colloids_info_list_all_build(cinfo);
+  update_colloids_array(cinfo);
 
   return 0;
 }
@@ -1241,6 +1300,9 @@ __host__ int colloids_info_list_all_build(colloids_info_t * cinfo) {
       }
     }
   }
+  
+  /* update target headall */
+  cinfo->target->headall = cinfo->headall;
 
   return 0;
 }
@@ -1355,17 +1417,22 @@ __host__ int colloids_info_a0max(colloids_info_t * cinfo, double * a0max) {
   assert(a0max);
 
   cs_cart_comm(cinfo->cs, &comm);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   /* Make sure lists are up-to-date */
   colloids_info_update_lists(cinfo);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   colloids_info_local_head(cinfo, &pc);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
   for (; pc; pc = pc->next) {
     double a0 = colloid_principal_radius(&pc->s);
     a0_local = dmax(a0_local, a0);
   }
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   MPI_Allreduce(&a0_local, a0max, 1, MPI_DOUBLE, MPI_MAX, comm);
+  tdpAssert(tdpPeekAtLastError()); // Debugging peek at last error
 
   return 0;
 }
@@ -1619,4 +1686,147 @@ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]) {
   cinfo->fgravity[Z] = g[Z];
 
   return 0;
+}
+
+void colloids_array_create(colloids_arrays_t * colloids_array, int n) {
+    if (n > 0) {
+      colloids_array->max_colloids = n;
+      tdpAssert(tdpMallocManaged((void **) &colloids_array->colloids, n*sizeof(colloid_t *), tdpMemAttachGlobal));
+    }
+}
+
+void colloids_array_free(colloids_arrays_t * colloids_array) {
+    if (colloids_array->colloids) {
+        tdpAssert( tdpFree(colloids_array->colloids) );
+    }
+}
+
+void colloids_array_resize(colloids_arrays_t * colloids_array) {
+  int n_devices;
+  tdpGetDeviceCount(&n_devices);
+
+  if (n_devices == 0) {
+    colloids_array->colloids = (colloid_t **) realloc(colloids_array->colloids, colloids_array->max_colloids * sizeof(colloid_t *));
+  } else if (n_devices > 0) {
+    void *newptr;
+    tdpMallocManaged(&newptr, colloids_array->max_colloids * sizeof(colloid_t *) * 2, tdpMemAttachGlobal);
+    tdpMemcpy(newptr, colloids_array->colloids, colloids_array->max_colloids, tdpMemcpyDeviceToDevice);
+    tdpFree(colloids_array->colloids);
+    colloids_array->colloids = (colloid_t **) &newptr;
+  }
+      
+  colloids_array->max_colloids *= 2;
+}
+
+void set_colloids_array(colloids_info_t * cinfo, int n_colloids) {
+    colloid_t * colloid;
+    colloids_info_all_head(cinfo, &colloid);
+    int i = 0;
+    for (; colloid; colloid = colloid->nextall) {
+        if (cinfo->colloid_array.colloids) {
+          if (i >= cinfo->colloid_array.max_colloids) {
+            printf("Colloids array overflow: i %d max %d n_colloids %d\n",
+                     i, cinfo->colloid_array.max_colloids, n_colloids);
+          }
+          assert(i < cinfo->colloid_array.max_colloids);
+          if (i < cinfo->colloid_array.max_colloids) {
+            cinfo->colloid_array.colloids[i] = colloid;
+          }
+          i++;
+        }
+    }
+
+    cinfo->colloid_array.n_colloids = i;
+}
+
+void update_colloids_array(colloids_info_t * cinfo) {
+  /* Copy over colloids pointers to array*/
+  int n_total;
+  colloids_info_ntotal(cinfo, &n_total);
+  if (n_total > cinfo->colloid_array.max_colloids) {
+    if (cinfo->colloid_array.max_colloids > 0) {
+      colloids_array_resize(&cinfo->colloid_array);
+    } else {
+      colloids_array_create(&cinfo->colloid_array, n_total);
+    }
+  }
+  set_colloids_array(cinfo, n_total);
+}
+
+void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo) {
+  newinfo->colloid_array.n_colloids = oldinfo->colloid_array.n_colloids;
+  newinfo->colloid_array.max_colloids = oldinfo->colloid_array.max_colloids;
+  colloids_array_create(&newinfo->colloid_array, newinfo->colloid_array.max_colloids);
+  
+  for (int i = 0; i < newinfo->colloid_array.n_colloids; i++) {
+    newinfo->colloid_array.colloids[i] = oldinfo->colloid_array.colloids[i];
+  }
+}
+
+void colloids_array_check(colloids_info_t *cinfo) {
+  colloid_t *pc = cinfo->headall;
+  int i = 0;
+  for (; pc; pc = pc->nextall) {
+    assert(pc->s.index == cinfo->colloid_array.colloids[i]->s.index);
+    assert(pc->s.r[0] == cinfo->colloid_array.colloids[i]->s.r[0]);
+    assert(pc->s.r[1] == cinfo->colloid_array.colloids[i]->s.r[1]);
+    assert(pc->s.r[2] == cinfo->colloid_array.colloids[i]->s.r[2]);
+    i++;
+  }
+}
+
+/**
+ * create_links_arrays
+ * 
+ * Allocate the arrays of links for a colloid assuming the max number of links determined by the colloid radius
+ * 
+ */
+void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc) {
+  tdpAssert(tdpMallocManaged((void **) &pc->links, sizeof(colloid_links_array_t), tdpMemAttachGlobal));
+  pc->links->max_links = colloid_link_max_3d(pc->s.a0, cinfo->options.nvel);
+  tdpAssert(tdpMallocManaged((void **) &pc->links->i, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->j, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->p, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->status, pc->links->max_links*sizeof(int), tdpMemAttachGlobal));
+  tdpAssert(tdpMallocManaged((void **) &pc->links->rb, pc->links->max_links*sizeof(double *), tdpMemAttachGlobal));
+  for (int i = 0; i < pc->links->max_links; i++) {
+    tdpAssert(tdpMallocManaged((void **) &pc->links->rb[i], 3*sizeof(double), tdpMemAttachGlobal)); // XXX: change order to reduce number of managed allocations.
+    for (int j = 0; j < 3; j++) 
+      pc->links->rb[i][j] = 0.0;
+  }
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->i[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->j[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->p[i] = 0;
+  for (int i = 0; i < pc->links->max_links; i++) pc->links->status[i] = 0;
+}
+
+/**
+ * Free the links arrays
+ */
+void colloid_free_links_arrays(colloid_t * pc) {
+  if (pc->links) {
+    tdpAssert( tdpFree(pc->links->i) );
+    tdpAssert( tdpFree(pc->links->j) );
+    tdpAssert( tdpFree(pc->links->p) );
+    tdpAssert( tdpFree(pc->links->status) );
+    tdpAssert( tdpFree(pc->links->rb) );
+    tdpAssert( tdpFree(pc->links) );
+  }
+}
+
+int test_colloid_links_array_allocation(colloids_info_t * cinfo) {
+  // Loop over each colloid and check that the links arrays are allocated by checking link_status pointer.
+  colloid_t * pc;
+  int count = 0;
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array.n_colloids; colloid_index++) {
+    pc = cinfo->colloid_array.colloids[colloid_index];
+    assert(pc->links->status != NULL);
+
+    for (int link_index = 0; link_index < pc->links->active_links; link_index++) {
+      if (pc->links->status[link_index] == LINK_UNUSED) continue;
+      count++;
+    }
+  }
+  
+  return count;
 }

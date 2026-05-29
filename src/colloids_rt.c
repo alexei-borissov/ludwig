@@ -182,6 +182,12 @@ int colloids_init_rt(pe_t * pe, rt_t * rt, cs_t * cs, colloids_info_t ** pinfo,
 
   wall_ss_cut_init(pe, cs, rt, wall, *interact);
 
+  /* Copy over colloid linked list to array */
+  int n_all;
+  colloids_info_nall(*pinfo, &n_all);
+  colloids_array_create(&(*pinfo)->colloid_array, n_all);
+  set_colloids_array(*pinfo, n_all);
+
   colloids_rt_cell_list_checks(pe, cs, model, pinfo, *interact);
   colloids_init_halo_range_check(pe, cs, *pinfo);
   if (nc > 1) interact_range_check(*interact, *pinfo);
@@ -264,7 +270,7 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     assert(state1 != NULL);
 
     colloids_rt_state_stub(pe, rt, cinfo, "colloid_one", state1);
-    colloids_info_add_local(cinfo, 1, state1->r, &pc);
+    colloids_info_add_local(cinfo, 1, state1->r, state1->a0, &pc);
     state1->index = 1;
     if (pc) pc->s = *state1;
     free(state1);
@@ -275,7 +281,7 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     state2 = (colloid_state_t *) calloc(1, sizeof(colloid_state_t));
     assert(state2 != NULL);
     colloids_rt_state_stub(pe, rt, cinfo, "colloid_two", state2);
-    colloids_info_add_local(cinfo, 2, state2->r, &pc);
+    colloids_info_add_local(cinfo, 2, state2->r, state2->a0, &pc);
     state2->index = 2;
     if (pc) pc->s = *state2;
     free(state2);
@@ -286,7 +292,7 @@ int colloids_rt_init_few(pe_t * pe, rt_t * rt, colloids_info_t * cinfo,
     state3 = (colloid_state_t *) calloc(1, sizeof(colloid_state_t));
     assert(state3 != NULL);
     colloids_rt_state_stub(pe, rt, cinfo, "colloid_three", state3);
-    colloids_info_add_local(cinfo, 3, state3->r, &pc);
+    colloids_info_add_local(cinfo, 3, state3->r, state3->a0, &pc);
     state3->index = 3;
     if (pc) pc->s = *state3;
     free(state3);

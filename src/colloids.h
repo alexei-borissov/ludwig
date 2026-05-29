@@ -19,8 +19,12 @@
 
 #include "coords.h"
 #include "colloid.h"
-#include "colloid_link.h"
 #include "colloid_options.h"
+
+typedef struct colloid colloid_t;
+typedef struct colloids_info_s colloids_info_t;
+
+#include "colloid_link.h"
 
 /* Auxiliary for diagnostic quantities (for output) */
 
@@ -47,7 +51,6 @@ struct colloid_diagnostic_s {
 
 /* Colloid structure */
 
-typedef struct colloid colloid_t;
 
 struct colloid {
 
@@ -90,9 +93,17 @@ struct colloid {
   /* Bonded neighbours cf. colloid.h */
 
   colloid_t * bonded[NBOND_MAX];
+
+  colloid_links_array_t * links; /* Arrays of links for this colloid. */ // XXX: Check that this is copied between host and device versions correctly.
 };
 
-typedef struct colloids_info_s colloids_info_t;
+typedef struct colloids_arrays_s colloids_arrays_t;
+
+struct colloids_arrays_s {
+    int n_colloids;
+    int max_colloids;
+    colloid_t ** colloids;
+};
 
 struct colloids_info_s {
 
@@ -124,6 +135,8 @@ struct colloids_info_s {
   pe_t * pe;                  /* Parallel environment */
   cs_t * cs;                  /* Coordinate system */
   colloids_info_t * target;   /* Copy of this structure on target */
+
+  colloids_arrays_t colloid_array;  /* Array of local colloids */
 };
 
 
@@ -141,20 +154,21 @@ __host__ int colloids_info_ncell(colloids_info_t * info, int ncell[3]);
 __host__ int colloids_info_nhalo(colloids_info_t * info, int * nhalo);
 __host__ int colloids_info_ntotal(colloids_info_t * info, int * ntotal);
 __host__ int colloids_info_nlocal(colloids_info_t * cinfo, int * nlocal);
+__host__ int colloids_info_nall(colloids_info_t * cinfo, int * nall); 
 __host__ int colloids_info_ntotal_set(colloids_info_t * cinfo);
 __host__ int colloids_info_cell_index(colloids_info_t * cinfo, int ic, int jc, int kc);
 __host__ int colloids_info_insert_colloid(colloids_info_t * cinfo, colloid_t * coll);
 __host__ int colloids_info_cell_list_clean(colloids_info_t * cinfo);
-__host__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc);
+__host__ __device__ int colloids_info_all_head(colloids_info_t * cinfo, colloid_t ** pc);
 __host__ int colloids_info_local_head(colloids_info_t * cinfo, colloid_t ** pc);
 __host__ int colloids_info_cell_list_head(colloids_info_t * info,
 				 int ic, int jc, int kc, colloid_t ** pc);
 __host__ int colloids_info_cell_coords(colloids_info_t * cinfo, const double r[3],
 			      int icell[3]);
 __host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
-			    const double r[3], colloid_t ** pc);
+			    const double r[3], double a0, colloid_t ** pc);
 __host__ int colloids_info_add(colloids_info_t * confo, int index, const double r[3],
-		      colloid_t ** pc);
+		      double a0, colloid_t ** pc);
 __host__ int colloids_info_update_cell_list(colloids_info_t * cinfo);
 __host__ int colloids_info_q_local(colloids_info_t * cinfo, double q[2]);
 __host__ int colloids_info_v_local(colloids_info_t * cinfo, double * v);
@@ -185,6 +199,17 @@ __host__ int colloids_ellipsoid_abc_check(colloids_info_t * info);
 __host__ int colloids_buoyancy_set(colloids_info_t * cinfo, const double b[3]);
 __host__ int colloids_gravity_set(colloids_info_t * cinfo, const double g[3]);
 
+__host__ void colloids_array_create(colloids_arrays_t * colloids_array, int n_colloids);
+__host__ void colloids_array_free(colloids_arrays_t * colloids_array);
+__host__ void colloids_array_resize(colloids_arrays_t * colloids_array);
+__host__ void set_colloids_array(colloids_info_t * cinfo, int n_colloids);
+__host__ void update_colloids_array(colloids_info_t * cinfo);
+__host__ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo);
+__host__ void colloids_array_check(colloids_info_t * cinfo);
+
+void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
+void test_colloid_links_arrays(colloids_info_t *cinfo);
+int test_colloid_links_array_allocation(colloids_info_t * cinfo);
 
 
 int colloids_info_add_state_local(colloids_info_t * info,
