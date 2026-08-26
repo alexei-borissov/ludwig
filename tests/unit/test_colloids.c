@@ -479,7 +479,7 @@ int test_colloids_array(pe_t * pe, cs_t * cs) {
   options.have_colloids = 1;
   colloids_info_create(pe, cs, &options, &cinfo);
 
-  colloids_info_add_local(cinfo, 0, r, &pc);
+  colloids_info_add_local(cinfo, 0, r, 0, &pc);
 
   update_colloids_array(cinfo);
 
