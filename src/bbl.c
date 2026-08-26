@@ -65,6 +65,10 @@ static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
 __global__ void bbl_pass0_kernel(kernel_3d_t k3d, cs_t * cs, lb_t * lb,
 				 colloids_info_t * cinfo);
 
+__global__ void bbl_colloid_test_kernel(colloids_info_t * cinfo);
+
+void bbl_colloid_test(cs_t * cs, lb_t * lb, colloids_info_t * cinfo);
+
 static __constant__ lb_collide_param_t lbp;
 
 int bbl_update_colloid_disk(bbl_t * bbl, colloid_t * pc,
@@ -235,6 +239,19 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   colloid_sums_halo(cinfo, COLLOID_SUM_STRUCTURE);
 
+  // Testing
+  bbl_colloid_test(bbl->cs, lb, cinfo);
+  //dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
+  dim3 n_blocks = {cinfo->colloid_array->n_colloids, 1, 1};
+  //dim3 n_blocks = {1, 1, 1};
+  dim3 n_threads = {1, 1, 1};
+  tdpAssert(tdpDeviceSynchronize());
+  //tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo->target);
+  tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo);
+  tdpAssert(tdpPeekAtLastError());
+  tdpAssert(tdpDeviceSynchronize());
+  // End test
+
   bbl_pass0(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
@@ -357,6 +374,62 @@ int bbl_pass0(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   }
 
   return 0;
+}
+
+/*****************************************************************************
+ *
+ *  bbl_colloid_test
+ *
+ *****************************************************************************/
+
+void bbl_colloid_test(cs_t * cs, lb_t * lb,
+                                 colloids_info_t * cinfo) {
+
+  assert(cs);
+  assert(lb);
+  assert(cinfo);
+
+  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
+    colloid_t *pc = cinfo->colloid_array->colloids[i];
+    int link_sum = 0;
+    for (int j = 0; j < pc->links->active_links; j++) {
+      link_sum += pc->links->i[j];
+    }
+    printf("cpu colloid %d sum_links %d\n", i, link_sum);
+  }
+
+}
+
+/*****************************************************************************
+ *
+ *  bbl_colloid_test_kernel
+ *
+ *****************************************************************************/
+
+__global__ void bbl_colloid_test_kernel(colloids_info_t * cinfo) {
+
+  int index;
+  __shared__ int link_sum;
+  assert(cinfo);
+
+
+  // Translate these loops to use for_simt_parallel later
+  index = blockIdx.x;
+  colloid_t *pc = cinfo->colloid_array->colloids[index];
+  int n_threads = blockDim.x;
+  int n_iterations = pc->links->active_links/n_threads + 1;
+  if (threadIdx.x == 0) link_sum = 0;
+  __syncthreads();
+  for (int i = 0; i < n_iterations; i++) {
+    int link_index = i * n_threads + threadIdx.x;
+    if (link_index < pc->links->active_links) {
+      atomicAdd(&link_sum, pc->links->i[link_index]);
+    }
+  }
+  __syncthreads();
+  if (threadIdx.x == 0)
+    printf("gpu colloid %d sum_links %d\n", index, link_sum);
+
 }
 
 /*****************************************************************************
