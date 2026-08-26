@@ -241,13 +241,10 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   // Testing
   bbl_colloid_test(bbl->cs, lb, cinfo);
-  //dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
-  dim3 n_blocks = {cinfo->colloid_array->n_colloids, 1, 1};
-  //dim3 n_blocks = {1, 1, 1};
-  dim3 n_threads = {1, 1, 1};
+  dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
+  dim3 n_threads = {32, 1, 1};
   tdpAssert(tdpDeviceSynchronize());
-  //tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo->target);
-  tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo);
+  tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo->target);
   tdpAssert(tdpPeekAtLastError());
   tdpAssert(tdpDeviceSynchronize());
   // End test
