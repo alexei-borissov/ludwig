@@ -1712,6 +1712,31 @@ void create_links_arrays_with_state(colloids_info_t * cinfo, const colloid_state
   for (int i = 0; i < pc->links->max_links; i++) pc->links->status[i] = 0;
 }
     
+/***************************************************************************
+ * 
+ * copy_link_to_array
+ * 
+ * Copies provided link to specified links array at the specified index
+ * 
+ ***************************************************************************/
+void copy_link_to_array(colloid_link_t *link, colloid_links_array_t *links_array, int index) {
+  assert(link);
+  assert(link->i);
+  assert(links_array);
+  assert(links_array->i);
+  assert(index < links_array->max_links);
+  if (index > links_array->active_links) {
+    assert(index == links_array->active_links + 1);
+    links_array->active_links++;
+  }
+  links_array->i[index] = link->i;
+  links_array->j[index] = link->j;
+  links_array->p[index] = link->p;
+  for (int i = 0; i < 3; i++)
+    links_array->rb[i][index] = link->rb[i];
+  links_array->status[index] = link->status;
+}
+
 /*****************************************************************************
  * 
  * copy_links_to_array
@@ -1719,7 +1744,9 @@ void create_links_arrays_with_state(colloids_info_t * cinfo, const colloid_state
  * Copy the links linked list to the links array
  * 
  *****************************************************************************/
-void copy_links_to_array(colloid_t *pc) {
+// XXX: likely slightly duplicating functionality. set_colloids_array should do something similar
+//      In any case this only gets called in build_update_links.
+__host__ void copy_links_to_array(colloid_t *pc) {
   colloid_link_t *link = pc->lnk;
   int index = 0;
   for (; link; link = link->next) {
