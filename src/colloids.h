@@ -7,7 +7,7 @@
  *  Edinburgh Soft Matter and Statistical Physics Group and
  *  Edinburgh Parallel Computing Centre
  *
- *  (c) 2010-2025 The University of Edinburgh
+ *  (c) 2010-2026 The University of Edinburgh
  *
  *  Contributing authors:
  *  Kevin Stratford (kevin@epcc.ed.ac.uk)
@@ -19,12 +19,8 @@
 
 #include "coords.h"
 #include "colloid.h"
-#include "colloid_options.h"
-
-typedef struct colloid colloid_t;
-typedef struct colloids_info_s colloids_info_t;
-
 #include "colloid_link.h"
+#include "colloid_options.h"
 
 /* Auxiliary for diagnostic quantities (for output) */
 
@@ -51,6 +47,7 @@ struct colloid_diagnostic_s {
 
 /* Colloid structure */
 
+typedef struct colloid colloid_t;
 
 struct colloid {
 
@@ -94,9 +91,10 @@ struct colloid {
 
   colloid_t * bonded[NBOND_MAX];
 
-  colloid_links_array_t * links; /* Arrays of links for this colloid. */ 
+  colloid_links_array_t * links; /* Arrays of links for this colloid. */
 };
 
+typedef struct colloids_info_s colloids_info_t;
 
 /* Array structure for accessing colloids */
 typedef struct colloids_arrays_s colloids_arrays_t;
@@ -167,12 +165,6 @@ __host__ int colloids_info_cell_list_head(colloids_info_t * info,
 				 int ic, int jc, int kc, colloid_t ** pc);
 __host__ int colloids_info_cell_coords(colloids_info_t * cinfo, const double r[3],
 			      int icell[3]);
-__host__ int colloids_info_add_local(colloids_info_t * cinfo, int index,
-			    const double r[3], double a0, colloid_t ** pc);
-__host__ int colloids_info_add_local_with_state(colloids_info_t * cinfo, const colloid_state_t * state, colloid_t ** pc);
-__host__ int colloids_info_add(colloids_info_t * confo, int index, const double r[3],
-		      double a0, colloid_t ** pc);
-__host__ int colloids_info_add_with_state(colloids_info_t * confo, const colloid_state_t * state, colloid_t ** pc);
 __host__ int colloids_info_update_cell_list(colloids_info_t * cinfo);
 __host__ int colloids_info_q_local(colloids_info_t * cinfo, double q[2]);
 __host__ int colloids_info_v_local(colloids_info_t * cinfo, double * v);
@@ -212,14 +204,9 @@ __host__ void update_colloids_array(colloids_info_t * cinfo);
 __host__ void copy_colloids_array_info(colloids_info_t * oldinfo, colloids_info_t * newinfo);
 __host__ void colloids_array_check(colloids_info_t * cinfo);
 
+int colloids_info_add_local(colloids_info_t * cinfo, const colloid_state_t * state, colloid_t ** pc);
+int colloids_info_add(colloids_info_t * confo, const colloid_state_t * state, colloid_t ** pc);
 
-void create_links_arrays(colloids_info_t * cinfo, colloid_t * pc);
-void create_links_arrays_with_state(colloids_info_t * cinfo, const colloid_state_t * state, colloid_t * pc);
-void colloid_free_links_arrays(colloid_t *pc);
-void copy_links_to_array(colloid_t *pc);
-
-int colloids_info_add_state_local(colloids_info_t * info,
-				  const colloid_state_t * state);
 int colloids_info_initialise(pe_t * pe, cs_t * cs,
 			     const colloid_options_t * options,
 			     colloids_info_t * info);
