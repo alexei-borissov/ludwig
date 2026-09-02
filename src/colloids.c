@@ -1725,8 +1725,8 @@ void copy_link_to_array(colloid_link_t *link, colloid_links_array_t *links_array
   assert(links_array);
   assert(links_array->i);
   assert(index < links_array->max_links);
-  if (index > links_array->active_links) {
-    assert(index == links_array->active_links + 1);
+  if (index >= links_array->active_links) {
+    assert(index == links_array->active_links);
     links_array->active_links++;
   }
   links_array->i[index] = link->i;

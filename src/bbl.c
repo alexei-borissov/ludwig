@@ -56,7 +56,9 @@ struct bbl_s {
 };
 
 static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
+static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag);
 static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 				   colloids_info_t * cinfo);
 static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
@@ -240,13 +242,13 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
   colloid_sums_halo(cinfo, COLLOID_SUM_STRUCTURE);
 
   // Testing
-  bbl_colloid_test(bbl->cs, lb, cinfo);
-  dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
-  dim3 n_threads = {32, 1, 1};
-  tdpAssert(tdpDeviceSynchronize());
-  tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo->target);
-  tdpAssert(tdpPeekAtLastError());
-  tdpAssert(tdpDeviceSynchronize());
+  //bbl_colloid_test(bbl->cs, lb, cinfo);
+  //dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
+  //dim3 n_threads = {32, 1, 1};
+  //tdpAssert(tdpDeviceSynchronize());
+  //tdpLaunchKernel(bbl_colloid_test_kernel, n_blocks, n_threads, 0, 0, cinfo->target);
+  //tdpAssert(tdpPeekAtLastError());
+  //tdpAssert(tdpDeviceSynchronize());
   // End test
 
   bbl_pass0(bbl, lb, cinfo);
@@ -265,10 +267,12 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  bbl_pass2(bbl, lb, cinfo);
+  bbl_pass2_original(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
+
+  //bbl_pass2(bbl, lb, cinfo);
 
   return 0;
 }
@@ -811,6 +815,212 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
 /*****************************************************************************
  *
+ *  bbl_pass2_original
+ *
+ *  Implement bounce-back on links having updated the colloid
+ *  velocities via the implicit method.
+ *
+ *  The surface stress is also accumulated here (and it really must
+ *  done between the colloid velcoity update and the actual bbl).
+ *  There's a separate routine to access it below.
+ *
+ *****************************************************************************/
+
+static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
+
+  int i, j, ij, ji;
+  int ia;
+  int ndist;
+
+  double dm;
+  double vdotc;
+  double dms;
+  double df, dg;
+  double fdist;
+  double wxrb[3];
+
+  double dgtm1;
+  double rho0;
+  LB_RCS2_DOUBLE(rcs2);
+
+  physics_t * phys = NULL;
+  colloid_t * pc = NULL;
+  colloid_link_t * p_link;
+
+
+  assert(bbl);
+  assert(lb);
+  assert(cinfo);
+
+  physics_ref(&phys);
+  physics_rho0(phys, &rho0);
+
+  ndist=lb->ndist;
+
+  /* Account the current phi deficit */
+  bbl->deltag = 0.0;
+
+  /* Zero the surface stress */
+
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++) {
+      bbl->stress[i][j] = 0.0;
+    }
+  }
+
+  /* All colloids, including halo */
+
+  colloids_info_all_head(cinfo, &pc);
+
+  int fluid_counter = 0;
+  int colloid_counter = 0;
+  int counter = 0;
+  for ( ; pc; pc = pc->nextall) {
+
+    if (pc->s.bc != COLLOID_BC_BBL) continue;
+
+    /* Set correction for phi arising from previous step */
+
+    dgtm1 = pc->s.deltaphi;
+    pc->s.deltaphi = 0.0;
+
+    /* Correction to the bounce-back for this particle if it is
+     * without full complement of links */
+
+    dms = 0.0;
+
+    for (ia = 0; ia < 3; ia++) {
+      dms += pc->s.v[ia]*pc->cbar[ia];
+      dms += pc->s.w[ia]*pc->rxcbar[ia];
+    }
+
+    dms = 2.0*rcs2*rho0*dms;
+
+    /* Run through the links */
+
+    p_link = pc->lnk;
+
+    // debugging
+    int link_index = 0;
+
+    for ( ; p_link; p_link = p_link->next) {
+
+      i = p_link->i;              /* index site i (outside) */
+      j = p_link->j;              /* index site j (inside) */
+      ij = p_link->p;             /* link velocity index i->j */
+      ji = lb->model.nvel - ij;   /* link velocity index j->i */
+
+      //debugging
+      assert(i == pc->links->i[link_index]);
+      assert(j == pc->links->j[link_index]);
+      assert(ij == pc->links->p[link_index]);
+      assert(p_link->status == pc->links->status[link_index]);
+      assert(fabs(p_link->rb[X] - pc->links->rb[X][link_index]) < DBL_EPSILON);
+      assert(fabs(p_link->rb[Y] - pc->links->rb[Y][link_index]) < DBL_EPSILON);
+      assert(fabs(p_link->rb[Z] - pc->links->rb[Z][link_index]) < DBL_EPSILON);
+      link_index++;
+      //end debugging
+
+      counter++;
+      if (p_link->status == LINK_FLUID) {
+        fluid_counter++;
+
+	lb_f(lb, i, ij, 0, &fdist);
+	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+
+	/* Compute the self-consistent boundary velocity,
+	 * and add the correction term for changes in shape. */
+
+	cross_product(pc->s.w, p_link->rb, wxrb);
+
+	vdotc = 0.0;
+	for (ia = 0; ia < 3; ia++) {
+	  vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
+	}
+	vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
+	df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
+
+	/* Contribution to mass conservation from squirmer */
+
+	df += lb->model.wv[ij]*pc->sump;
+
+	/* Correction owing to missing links "squeeze term" */
+
+	df -= lb->model.wv[ij]*dms;
+
+	/* The outside site actually undergoes BBL. */
+
+	lb_f(lb, i, ij, LB_RHO, &fdist);
+	fdist = fdist - df;
+	lb_f_set(lb, j, ji, LB_RHO, fdist);
+
+	/* This is slightly clunky. If the order parameter is
+	 * via LB, bounce back with correction. */
+
+	if (ndist > 1) {
+	  lb_0th_moment(lb, i, LB_PHI, &dg);
+	  dg *= vdotc;
+	  pc->s.deltaphi += dg;
+	  dg -= lb->model.wv[ij]*dgtm1;
+
+	  lb_f(lb, i, ij, LB_PHI, &fdist);
+	  fdist = fdist - dg;
+	  lb_f_set(lb, j, ji, LB_PHI, fdist);
+	}
+
+	/* The stress is r_b f_b */
+	for (ia = 0; ia < 3; ia++) {
+	  bbl->stress[ia][X] += p_link->rb[X]*(dm - df)*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Y] += p_link->rb[Y]*(dm - df)*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Z] += p_link->rb[Z]*(dm - df)*lb->model.cv[ij][ia];
+	}
+      }
+      else if (p_link->status == LINK_COLLOID) {
+        colloid_counter++;
+
+	/* The stress should include the solid->solid term */
+
+	lb_f(lb, i, ij, 0, &fdist);
+	dm = fdist;
+	lb_f(lb, j, ji, 0, &fdist);
+	dm += fdist;
+
+	for (ia = 0; ia < 3; ia++) {
+	  bbl->stress[ia][X] += p_link->rb[X]*dm*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Y] += p_link->rb[Y]*dm*lb->model.cv[ij][ia];
+	  bbl->stress[ia][Z] += p_link->rb[Z]*dm*lb->model.cv[ij][ia];
+	}
+      }
+      /* Next link */
+    }
+
+    // debugging
+    assert(link_index == pc->links->active_links);
+    // end debugging
+
+    /* Reset factors required for change of shape, etc */
+
+    pc->deltam = 0.0;
+    pc->sump = 0.0;
+
+    for (ia = 0; ia < 3; ia++) {
+      pc->f0[ia] = 0.0;
+      pc->t0[ia] = 0.0;
+      pc->fc0[ia] = 0.0;
+      pc->tc0[ia] = 0.0;
+    }
+
+    bbl->deltag += pc->s.deltaphi;
+  }
+  printf("counter %d fluid_counter %d colloid_counter %d\n", counter, fluid_counter, colloid_counter);
+  printf("bbl stress after reduction: %f %f %f %f %f %f %f %f %f\n", bbl->stress[0][0], bbl->stress[0][1], bbl->stress[0][2], bbl->stress[1][0], bbl->stress[1][1], bbl->stress[1][2], bbl->stress[2][0], bbl->stress[2][1], bbl->stress[2][2]);
+  printf("bbl deltag after reduction: %f\n", bbl->deltag);
+
+  return 0;
+}
+
+/*****************************************************************************
+ *
  *  bbl_pass2
  *
  *  Implement bounce-back on links having updated the colloid
@@ -866,16 +1076,93 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   /* All colloids, including halo */
 
-  colloids_info_all_head(cinfo, &pc);
+  // Additional allocations for the kernel
+  double ***bbl_stress;
+  tdpAssert(tdpMallocManaged((void**) &bbl_stress, cinfo->colloid_array->n_colloids * sizeof(double**), tdpMemAttachGlobal));
+  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
+    tdpAssert(tdpMallocManaged((void**) &bbl_stress[i], 3 * sizeof(double*), tdpMemAttachGlobal));
+    for (int j = 0; j < 3; j++) {
+      tdpAssert(tdpMallocManaged((void**) &bbl_stress[i][j], 3 * sizeof(double), tdpMemAttachGlobal));
+      for (int k = 0; k < 3; k++) {
+        bbl_stress[i][j][k] = 0.0;
+      }
+    }
+  }
 
-  for ( ; pc; pc = pc->nextall) {
+  double *bbl_deltag;
+  tdpAssert(tdpMallocManaged((void**) &bbl_deltag, cinfo->colloid_array->n_colloids * sizeof(double), tdpMemAttachGlobal));
+  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
+    bbl_deltag[i] = 0.0;
+  }
 
-    if (pc->s.bc != COLLOID_BC_BBL) continue;
+  // Actually launch the kernel
+  printf("prelaunch n colloids %d\n", cinfo->colloid_array->n_colloids);
+  dim3 nblk = {1, 1, 1};
+  dim3 ntpb = {1, 1, 1};
+  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, bbl_stress, bbl_deltag);
+  tdpAssert(tdpPeekAtLastError());
+  tdpAssert(tdpDeviceSynchronize());
+
+  // Finish reductions
+  for (int colloid_index = 0; colloid_index < cinfo->colloid_array->n_colloids; colloid_index++) {
+    for (i = 0; i < 3; i++) {
+      for (j = 0; j < 3; j++) {
+        bbl->stress[i][j] += bbl_stress[colloid_index][i][j];
+      }
+    }
+  }
+
+  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
+    bbl->deltag += bbl_deltag[i];
+  }
+  printf("bbl stress after reduction: %f %f %f %f %f %f %f %f %f\n", bbl->stress[0][0], bbl->stress[0][1], bbl->stress[0][2], bbl->stress[1][0], bbl->stress[1][1], bbl->stress[1][2], bbl->stress[2][0], bbl->stress[2][1], bbl->stress[2][2]);
+  printf("bbl deltag after reduction: %f\n", bbl->deltag);
+
+  // Tidy up the allocations
+  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
+    for (int j = 0; j < 3; j++) {
+      tdpAssert(tdpFree(bbl_stress[i][j]));
+    }
+    tdpAssert(tdpFree(bbl_stress[i]));
+  }
+  tdpAssert(tdpFree(bbl_stress));
+  tdpAssert(tdpFree(bbl_deltag));
+
+  return 0;
+}
+
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag) {
+
+  colloid_t * pc = NULL;
+  double dgtm1;
+  double dms;
+  int ia;
+  double rho0;
+  LB_RCS2_DOUBLE(rcs2);
+  int i, j, ij, ji;
+  double dm;
+  double vdotc;
+  double df, dg;
+  double fdist;
+  double wxrb[3];
+  
+  physics_t * phys = NULL;
+  
+  physics_ref(&phys);
+  physics_rho0(phys, &rho0);
+  
+    int colloid_index = blockIdx.x;
+    pc = cinfo->colloid_array->colloids[colloid_index];
+
+    if (pc->s.bc != COLLOID_BC_BBL) return;
 
     /* Set correction for phi arising from previous step */
 
     dgtm1 = pc->s.deltaphi;
-    pc->s.deltaphi = 0.0;
+    if (threadIdx.x == 0) {
+      pc->s.deltaphi = 0.0;
+    }
+    __syncthreads();
 
     /* Correction to the bounce-back for this particle if it is
      * without full complement of links */
@@ -891,102 +1178,109 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     /* Run through the links */
 
-    p_link = pc->lnk;
+    int fluid_counter = 0;
+    int colloid_counter = 0;
+    int counter = 0;
+    for (int link_index = threadIdx.x; link_index < pc->links->active_links; link_index += blockDim.x) {
 
-    for ( ; p_link; p_link = p_link->next) {
-
-      i = p_link->i;              /* index site i (outside) */
-      j = p_link->j;              /* index site j (inside) */
-      ij = p_link->p;             /* link velocity index i->j */
+      i = pc->links->i[link_index];              /* index site i (outside) */
+      j = pc->links->j[link_index];              /* index site j (inside) */
+      ij = pc->links->p[link_index];             /* link velocity index i->j */
       ji = lb->model.nvel - ij;   /* link velocity index j->i */
 
-      if (p_link->status == LINK_FLUID) {
+      counter++;
+      if (pc->links->status[link_index] == LINK_FLUID) {
+        fluid_counter++;
 
-	lb_f(lb, i, ij, 0, &fdist);
-	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+        lb_f(lb, i, ij, 0, &fdist);
+        dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+        
+        /* Compute the self-consistent boundary velocity,
+         * and add the correction term for changes in shape. */
+        
+        double rb[3];
+        for (int i = 0; i < 3; i++) {
+          rb[i] = pc->links->rb[i][link_index];
+        }
+        cross_product(pc->s.w, rb, wxrb);
+        
+        vdotc = 0.0;
+        for (ia = 0; ia < 3; ia++) {
+          vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
+        }
+        vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
+        df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
+        
+        /* Contribution to mass conservation from squirmer */
+        
+        df += lb->model.wv[ij]*pc->sump;
+        
+        /* Correction owing to missing links "squeeze term" */
+        
+        df -= lb->model.wv[ij]*dms;
+        
+        /* The outside site actually undergoes BBL. */
+        
+        lb_f(lb, i, ij, LB_RHO, &fdist);
+        fdist = fdist - df;
+        lb_f_set(lb, j, ji, LB_RHO, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
 
-	/* Compute the self-consistent boundary velocity,
-	 * and add the correction term for changes in shape. */
+        /* This is slightly clunky. If the order parameter is
+         * via LB, bounce back with correction. */
+        
+        if (lb->ndist > 1) {
+          lb_0th_moment(lb, i, LB_PHI, &dg);
+          dg *= vdotc;
+          pc->s.deltaphi += dg; // XXX: This could be a race condition.
+          dg -= lb->model.wv[ij]*dgtm1;
+        
+          lb_f(lb, i, ij, LB_PHI, &fdist);
+          fdist = fdist - dg;
+          lb_f_set(lb, j, ji, LB_PHI, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
+        }
+        
+        /* The stress is r_b f_b */
+        for (ia = 0; ia < 3; ia++) {
+          atomicAdd(&bbl_stress[colloid_index][ia][X], pc->links->rb[X][link_index]*(dm - df)*lb->model.cv[ij][ia]);
+          atomicAdd(&bbl_stress[colloid_index][ia][Y], pc->links->rb[Y][link_index]*(dm - df)*lb->model.cv[ij][ia]);
+          atomicAdd(&bbl_stress[colloid_index][ia][Z], pc->links->rb[Z][link_index]*(dm - df)*lb->model.cv[ij][ia]);
+        }
+     } else if (pc->links->status[link_index] == LINK_COLLOID) {
+       colloid_counter++;
 
-	cross_product(pc->s.w, p_link->rb, wxrb);
+       /* The stress should include the solid->solid term */
+       
+       lb_f(lb, i, ij, 0, &fdist);
+       dm = fdist;
+       lb_f(lb, j, ji, 0, &fdist);
+       dm += fdist;
+       
+       for (ia = 0; ia < 3; ia++) {
+         atomicAdd(&bbl_stress[colloid_index][ia][X], pc->links->rb[X][link_index]*dm*lb->model.cv[ij][ia]);
+         atomicAdd(&bbl_stress[colloid_index][ia][Y], pc->links->rb[Y][link_index]*dm*lb->model.cv[ij][ia]);
+         atomicAdd(&bbl_stress[colloid_index][ia][Z], pc->links->rb[Z][link_index]*dm*lb->model.cv[ij][ia]);
+       }
+     }
+     /* Next link */
+   }
 
-	vdotc = 0.0;
-	for (ia = 0; ia < 3; ia++) {
-	  vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
-	}
-	vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
-	df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
+   /* Reset factors required for change of shape, etc */
 
-	/* Contribution to mass conservation from squirmer */
+   __syncthreads();
+   if (threadIdx.x == 0) {
+     pc->deltam = 0.0;
+     pc->sump = 0.0;
 
-	df += lb->model.wv[ij]*pc->sump;
+     for (ia = 0; ia < 3; ia++) {
+       pc->f0[ia] = 0.0;
+       pc->t0[ia] = 0.0;
+       pc->fc0[ia] = 0.0;
+       pc->tc0[ia] = 0.0;
+     }
+   }
 
-	/* Correction owing to missing links "squeeze term" */
-
-	df -= lb->model.wv[ij]*dms;
-
-	/* The outside site actually undergoes BBL. */
-
-	lb_f(lb, i, ij, LB_RHO, &fdist);
-	fdist = fdist - df;
-	lb_f_set(lb, j, ji, LB_RHO, fdist);
-
-	/* This is slightly clunky. If the order parameter is
-	 * via LB, bounce back with correction. */
-
-	if (ndist > 1) {
-	  lb_0th_moment(lb, i, LB_PHI, &dg);
-	  dg *= vdotc;
-	  pc->s.deltaphi += dg;
-	  dg -= lb->model.wv[ij]*dgtm1;
-
-	  lb_f(lb, i, ij, LB_PHI, &fdist);
-	  fdist = fdist - dg;
-	  lb_f_set(lb, j, ji, LB_PHI, fdist);
-	}
-
-	/* The stress is r_b f_b */
-	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += p_link->rb[X]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += p_link->rb[Y]*(dm - df)*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += p_link->rb[Z]*(dm - df)*lb->model.cv[ij][ia];
-	}
-      }
-      else if (p_link->status == LINK_COLLOID) {
-
-	/* The stress should include the solid->solid term */
-
-	lb_f(lb, i, ij, 0, &fdist);
-	dm = fdist;
-	lb_f(lb, j, ji, 0, &fdist);
-	dm += fdist;
-
-	for (ia = 0; ia < 3; ia++) {
-	  bbl->stress[ia][X] += p_link->rb[X]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Y] += p_link->rb[Y]*dm*lb->model.cv[ij][ia];
-	  bbl->stress[ia][Z] += p_link->rb[Z]*dm*lb->model.cv[ij][ia];
-	}
-      }
-      /* Next link */
-    }
-
-    /* Reset factors required for change of shape, etc */
-
-    pc->deltam = 0.0;
-    pc->sump = 0.0;
-
-    for (ia = 0; ia < 3; ia++) {
-      pc->f0[ia] = 0.0;
-      pc->t0[ia] = 0.0;
-      pc->fc0[ia] = 0.0;
-      pc->tc0[ia] = 0.0;
-    }
-
-    bbl->deltag += pc->s.deltaphi;
-  }
-
-
-  return 0;
+   atomicAdd(&bbl_deltag[colloid_index], pc->s.deltaphi);
+   printf("counter %d fluid_counter %d colloid_counter %d\n", counter, fluid_counter, colloid_counter);
 }
 
 /*****************************************************************************
