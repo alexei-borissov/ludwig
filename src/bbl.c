@@ -58,7 +58,7 @@ struct bbl_s {
 static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
-__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag);
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag, double rho0);
 static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 				   colloids_info_t * cinfo);
 static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
@@ -267,12 +267,12 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  //bbl_pass2_original(bbl, lb, cinfo);
+  bbl_pass2_original(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
 
-  bbl_pass2(bbl, lb, cinfo);
+  //bbl_pass2(bbl, lb, cinfo);
 
   return 0;
 }
@@ -872,9 +872,6 @@ static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   colloids_info_all_head(cinfo, &pc);
 
-  int fluid_counter = 0;
-  int colloid_counter = 0;
-  int counter = 0;
   for ( ; pc; pc = pc->nextall) {
 
     if (pc->s.bc != COLLOID_BC_BBL) continue;
@@ -921,9 +918,7 @@ static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
       link_index++;
       //end debugging
 
-      counter++;
       if (p_link->status == LINK_FLUID) {
-        fluid_counter++;
 
 	lb_f(lb, i, ij, 0, &fdist);
 	dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
@@ -976,7 +971,6 @@ static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 	}
       }
       else if (p_link->status == LINK_COLLOID) {
-        colloid_counter++;
 
 	/* The stress should include the solid->solid term */
 
@@ -1012,9 +1006,6 @@ static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
     bbl->deltag += pc->s.deltaphi;
   }
-  printf("counter %d fluid_counter %d colloid_counter %d\n", counter, fluid_counter, colloid_counter);
-  printf("bbl stress after reduction: %f %f %f %f %f %f %f %f %f\n", bbl->stress[0][0], bbl->stress[0][1], bbl->stress[0][2], bbl->stress[1][0], bbl->stress[1][1], bbl->stress[1][2], bbl->stress[2][0], bbl->stress[2][1], bbl->stress[2][2]);
-  printf("bbl deltag after reduction: %f\n", bbl->deltag);
 
   return 0;
 }
@@ -1096,10 +1087,9 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   }
 
   // Actually launch the kernel
-  printf("prelaunch n colloids %d\n", cinfo->colloid_array->n_colloids);
   dim3 nblk = {cinfo->colloid_array->n_colloids, 1, 1};
-  dim3 ntpb = {1, 1, 1};
-  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, bbl_stress, bbl_deltag);
+  dim3 ntpb = {128, 1, 1};
+  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, bbl_stress, bbl_deltag, rho0);
   tdpAssert(tdpPeekAtLastError());
   tdpAssert(tdpDeviceSynchronize());
 
@@ -1115,8 +1105,6 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
     bbl->deltag += bbl_deltag[i];
   }
-  printf("bbl stress after reduction: %f %f %f %f %f %f %f %f %f\n", bbl->stress[0][0], bbl->stress[0][1], bbl->stress[0][2], bbl->stress[1][0], bbl->stress[1][1], bbl->stress[1][2], bbl->stress[2][0], bbl->stress[2][1], bbl->stress[2][2]);
-  printf("bbl deltag after reduction: %f\n", bbl->deltag);
 
   // Tidy up the allocations
   for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
@@ -1131,13 +1119,12 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   return 0;
 }
 
-__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag) {
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag, double rho0) {
 
   colloid_t * pc = NULL;
   double dgtm1;
   double dms;
   int ia;
-  double rho0;
   LB_RCS2_DOUBLE(rcs2);
   int i, j, ij, ji;
   double dm;
@@ -1145,11 +1132,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
   double df, dg;
   double fdist;
   double wxrb[3];
-  
-  physics_t * phys = NULL;
-  
-  physics_ref(&phys);
-  physics_rho0(phys, &rho0);
   
     int colloid_index = blockIdx.x;
     pc = cinfo->colloid_array->colloids[colloid_index];
@@ -1178,9 +1160,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
 
     /* Run through the links */
 
-    int fluid_counter = 0;
-    int colloid_counter = 0;
-    int counter = 0;
     for (int link_index = threadIdx.x; link_index < pc->links->active_links; link_index += blockDim.x) {
 
       i = pc->links->i[link_index];              /* index site i (outside) */
@@ -1188,9 +1167,7 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
       ij = pc->links->p[link_index];             /* link velocity index i->j */
       ji = lb->model.nvel - ij;   /* link velocity index j->i */
 
-      counter++;
       if (pc->links->status[link_index] == LINK_FLUID) {
-        fluid_counter++;
 
         lb_f(lb, i, ij, 0, &fdist);
         dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
@@ -1246,7 +1223,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
           atomicAdd(&bbl_stress[colloid_index][ia][Z], pc->links->rb[Z][link_index]*(dm - df)*lb->model.cv[ij][ia]);
         }
      } else if (pc->links->status[link_index] == LINK_COLLOID) {
-       colloid_counter++;
 
        /* The stress should include the solid->solid term */
        
@@ -1280,7 +1256,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
    }
 
    atomicAdd(&bbl_deltag[colloid_index], pc->s.deltaphi);
-   printf("counter %d fluid_counter %d colloid_counter %d\n", counter, fluid_counter, colloid_counter);
 }
 
 /*****************************************************************************
