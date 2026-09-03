@@ -267,12 +267,12 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  bbl_pass2_original(bbl, lb, cinfo);
+  //bbl_pass2_original(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
 
-  //bbl_pass2(bbl, lb, cinfo);
+  bbl_pass2(bbl, lb, cinfo);
 
   return 0;
 }
@@ -1097,7 +1097,7 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   // Actually launch the kernel
   printf("prelaunch n colloids %d\n", cinfo->colloid_array->n_colloids);
-  dim3 nblk = {1, 1, 1};
+  dim3 nblk = {cinfo->colloid_array->n_colloids, 1, 1};
   dim3 ntpb = {1, 1, 1};
   tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, bbl_stress, bbl_deltag);
   tdpAssert(tdpPeekAtLastError());
