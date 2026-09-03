@@ -58,7 +58,7 @@ struct bbl_s {
 static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
-__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag, double rho0);
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0);
 static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 				   colloids_info_t * cinfo);
 static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
@@ -267,12 +267,12 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  bbl_pass2_original(bbl, lb, cinfo);
+  //bbl_pass2_original(bbl, lb, cinfo);
 
   /* __NVCC__ TODO: remove */
   lb_memcpy(lb, tdpMemcpyHostToDevice);
 
-  //bbl_pass2(bbl, lb, cinfo);
+  bbl_pass2(bbl, lb, cinfo);
 
   return 0;
 }
@@ -1067,59 +1067,17 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
 
   /* All colloids, including halo */
 
-  // Additional allocations for the kernel
-  double ***bbl_stress;
-  tdpAssert(tdpMallocManaged((void**) &bbl_stress, cinfo->colloid_array->n_colloids * sizeof(double**), tdpMemAttachGlobal));
-  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
-    tdpAssert(tdpMallocManaged((void**) &bbl_stress[i], 3 * sizeof(double*), tdpMemAttachGlobal));
-    for (int j = 0; j < 3; j++) {
-      tdpAssert(tdpMallocManaged((void**) &bbl_stress[i][j], 3 * sizeof(double), tdpMemAttachGlobal));
-      for (int k = 0; k < 3; k++) {
-        bbl_stress[i][j][k] = 0.0;
-      }
-    }
-  }
-
-  double *bbl_deltag;
-  tdpAssert(tdpMallocManaged((void**) &bbl_deltag, cinfo->colloid_array->n_colloids * sizeof(double), tdpMemAttachGlobal));
-  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
-    bbl_deltag[i] = 0.0;
-  }
-
   // Actually launch the kernel
   dim3 nblk = {cinfo->colloid_array->n_colloids, 1, 1};
   dim3 ntpb = {128, 1, 1};
-  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, bbl_stress, bbl_deltag, rho0);
+  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, rho0);
   tdpAssert(tdpPeekAtLastError());
   tdpAssert(tdpDeviceSynchronize());
-
-  // Finish reductions
-  for (int colloid_index = 0; colloid_index < cinfo->colloid_array->n_colloids; colloid_index++) {
-    for (i = 0; i < 3; i++) {
-      for (j = 0; j < 3; j++) {
-        bbl->stress[i][j] += bbl_stress[colloid_index][i][j];
-      }
-    }
-  }
-
-  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
-    bbl->deltag += bbl_deltag[i];
-  }
-
-  // Tidy up the allocations
-  for (int i = 0; i < cinfo->colloid_array->n_colloids; i++) {
-    for (int j = 0; j < 3; j++) {
-      tdpAssert(tdpFree(bbl_stress[i][j]));
-    }
-    tdpAssert(tdpFree(bbl_stress[i]));
-  }
-  tdpAssert(tdpFree(bbl_stress));
-  tdpAssert(tdpFree(bbl_deltag));
 
   return 0;
 }
 
-__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***bbl_stress, double *bbl_deltag, double rho0) {
+__global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0) {
 
   colloid_t * pc = NULL;
   double dgtm1;
@@ -1216,12 +1174,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
           lb_f_set(lb, j, ji, LB_PHI, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
         }
         
-        /* The stress is r_b f_b */
-        for (ia = 0; ia < 3; ia++) {
-          atomicAdd(&bbl_stress[colloid_index][ia][X], pc->links->rb[X][link_index]*(dm - df)*lb->model.cv[ij][ia]);
-          atomicAdd(&bbl_stress[colloid_index][ia][Y], pc->links->rb[Y][link_index]*(dm - df)*lb->model.cv[ij][ia]);
-          atomicAdd(&bbl_stress[colloid_index][ia][Z], pc->links->rb[Z][link_index]*(dm - df)*lb->model.cv[ij][ia]);
-        }
      } else if (pc->links->status[link_index] == LINK_COLLOID) {
 
        /* The stress should include the solid->solid term */
@@ -1231,11 +1183,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
        lb_f(lb, j, ji, 0, &fdist);
        dm += fdist;
        
-       for (ia = 0; ia < 3; ia++) {
-         atomicAdd(&bbl_stress[colloid_index][ia][X], pc->links->rb[X][link_index]*dm*lb->model.cv[ij][ia]);
-         atomicAdd(&bbl_stress[colloid_index][ia][Y], pc->links->rb[Y][link_index]*dm*lb->model.cv[ij][ia]);
-         atomicAdd(&bbl_stress[colloid_index][ia][Z], pc->links->rb[Z][link_index]*dm*lb->model.cv[ij][ia]);
-       }
      }
      /* Next link */
    }
@@ -1254,8 +1201,6 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double ***b
        pc->tc0[ia] = 0.0;
      }
    }
-
-   atomicAdd(&bbl_deltag[colloid_index], pc->s.deltaphi);
 }
 
 /*****************************************************************************
