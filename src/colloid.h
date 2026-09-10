@@ -19,6 +19,7 @@
 #define LUDWIG_COLLOID_H
 
 #include <stdio.h>
+#include "target.h"
 
 /* Tag to describe I/O format version appearing in files */
 
@@ -144,7 +145,7 @@ int colloid_state_init_ellipsoid(int index, const double abc[3],
 				 const double q[4], const double r0[3],
 				 colloid_state_t * state);
 
-double colloid_principal_radius(const colloid_state_t * s);
+__host__ __device__ double colloid_principal_radius(const colloid_state_t * s);
 
 /* Inline */
 
