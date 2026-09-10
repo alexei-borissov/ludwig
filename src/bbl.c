@@ -33,7 +33,7 @@
 #include "bbl.h"
 #include "colloid.h"
 #include "colloids.h"
-
+#include "timer.h"
 
 /* Ellipsoid update mechanism flag */
 /* There's no particular reason not to use the quaternion method, but
@@ -255,12 +255,18 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_pass0(bbl, lb, cinfo);
   
+  TIMER_start(TIMER_FREE2);
   bbl_pass1(bbl, lb, cinfo);
+  TIMER_stop(TIMER_FREE2);
 
   /* __NVCC__ TODO: remove */
+  //TIMER_start(TIMER_FREE3);
   //lb_memcpy(lb, tdpMemcpyDeviceToHost);
+  //TIMER_stop(TIMER_FREE3);
 
+  //TIMER_start(TIMER_FREE2);
   //bbl_pass1_original(bbl, lb, cinfo);
+  //TIMER_stop(TIMER_FREE2);
 
   colloid_sums_halo(cinfo, COLLOID_SUM_DYNAMICS);
 
@@ -271,12 +277,18 @@ int bounce_back_on_links(bbl_t * bbl, lb_t * lb, wall_t * wall,
 
   bbl_update_colloids(bbl, wall, cinfo);
 
-  //bbl_pass2_original(bbl, lb, cinfo);
+  //TIMER_start(TIMER_FREE4);
+  //bbl_pass2_openmp(bbl, lb, cinfo);
+  //TIMER_stop(TIMER_FREE4);
 
   /* __NVCC__ TODO: remove */
-  //lb_memcpy(lb, tdpMemcpyHostToDevice);
+  //TIMER_start(TIMER_FREE3);
+  //lb_memcpy(lb, tdpMemcpyDeviceToHost);
+  //TIMER_stop(TIMER_FREE3);
 
+  TIMER_start(TIMER_FREE4);
   bbl_pass2(bbl, lb, cinfo);
+  TIMER_stop(TIMER_FREE4);
 
   return 0;
 }
