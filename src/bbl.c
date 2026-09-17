@@ -58,9 +58,11 @@ struct bbl_s {
 static int bbl_pass1_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 __global__ void bbl_pass1_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0);
+__host__ __device__ void bbl_pass1_process_links(colloid_t * pc, lb_t * lb, double rho0, int link_index);
 static int bbl_pass2_original(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo);
 __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0);
+__host__ __device__ void bbl_pass2_process_links(colloid_t * pc, lb_t * lb, double rho0, double dms, double dgtm1, int link_index);
 static int bbl_active_conservation(bbl_t * bbl, lb_t * lb,
 				   colloids_info_t * cinfo);
 static int bbl_wall_lubrication_account(bbl_t * bbl, wall_t * wall,
@@ -800,8 +802,17 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   physics_ref(&phys);
   physics_rho0(phys, &rho0);
 
-  dim3 n_blocks = {cinfo->target->colloid_array->n_colloids, 1, 1};
-  dim3 n_threads = {128, 1, 1};
+  dim3 n_blocks = {1, 1, 1};
+  dim3 n_threads = {1, 1, 1};
+  int n_devices;
+  tdpGetDeviceCount(&n_devices);
+  if (n_devices == 0) {
+    n_threads.x = (cinfo->target->colloid_array->n_colloids < omp_get_max_threads()) ?
+                  cinfo->target->colloid_array->n_colloids : omp_get_max_threads();
+  } else {
+    n_blocks.x = cinfo->target->colloid_array->n_colloids;
+    n_threads.x = 128;
+  }
   tdpLaunchKernel(bbl_pass1_kernel, n_blocks, n_threads, 0, 0, cinfo->target, lb->target, rho0);
   tdpAssert(tdpPeekAtLastError());
   tdpAssert(tdpDeviceSynchronize());
@@ -830,280 +841,330 @@ __global__ void bbl_pass1_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
   double c[3];
   double rbxc[3];
 
-
   /* All colloids, including halo */
-  int colloid_index = blockIdx.x;
-  colloid_t * pc = cinfo->colloid_array->colloids[colloid_index];
+  int colloid_start_index;
+  int colloid_stride;
+  int n_devices;
+  int thread;
+  tdpGetDeviceCount(&n_devices);
+  if (n_devices == 0) {
+    colloid_start_index = omp_get_thread_num();
+    colloid_stride = omp_get_num_threads();
+  } else {
+    colloid_start_index = blockIdx.x;
+    colloid_stride = gridDim.x;
+  }
+  //printf("thread %d threadIdx.x %d blockIdx.x %d blockDim.x %d gridDim.x %d\n", omp_get_thread_num(), threadIdx.x, blockIdx.x, blockDim.x, gridDim.x);
+  for (int colloid_index = colloid_start_index; colloid_index < cinfo->colloid_array->n_colloids; colloid_index += colloid_stride) {
+    colloid_t * pc = cinfo->colloid_array->colloids[colloid_index];
 
-  if (pc->s.bc == COLLOID_BC_BBL) {
+    if (pc->s.bc == COLLOID_BC_BBL) {
+
+      //elabc = pc->s.elabc;
+      //elc = sqrt(elabc[0]*elabc[0] - elabc[1]*elabc[1]);
+      //ele = elc/elabc[0];
+      //ela = colloid_principal_radius(&pc->s);
+
+      /* Diagnostic record of f0 before additions are made. */
+      /* Really, f0 should not be used for dual purposes... */
+
+      if ((threadIdx.x == 0 && n_devices > 0) || n_devices == 0) {
+        pc->diagnostic.fbuild[X] = pc->f0[X];
+        pc->diagnostic.fbuild[Y] = pc->f0[Y];
+        pc->diagnostic.fbuild[Z] = pc->f0[Z];
+
+        for (i = 0; i < 21; i++) {
+          pc->zeta[i] = 0.0;
+        }
+      }
+
+      /* We need to normalise link quantities by the sum of weights
+       * over the particle. Note that sumw cannot be zero here during
+       * correct operation (implies the particle has no links). */
+
+      if ((threadIdx.x == 0 && n_devices > 0) || n_devices == 0) {
+        double rsumw = 1.0 / pc->sumw;
+        for (ia = 0; ia < 3; ia++) {
+          pc->cbar[ia]   *= rsumw;
+          pc->rxcbar[ia] *= rsumw;
+        }
+        pc->deltam   *= rsumw;
+        pc->s.deltaphi *= rsumw;
+      }
+      if (n_devices > 0) {
+        __syncthreads();
+      }
+
+      /* Sum over the links */
+      int start_index;
+      int stride;
+      if (n_devices == 0) {
+        start_index = 0;
+        stride = 1;
+      } else {
+        start_index = threadIdx.x;
+        stride = blockDim.x;
+      }
+      for (int link_index = start_index; link_index < pc->links->active_links; link_index += stride) {
+        bbl_pass1_process_links(pc, lb, rho0, link_index);
+      }
+    }
+  }
+}
+
+__host__ __device__ void bbl_pass1_process_links(colloid_t * pc, lb_t * lb, double rho0, int link_index) {
+    int ia;
+    int i, j, ij, ji;
+    double fdist;
+    double dm;
+    double delta;
+    LB_RCS2_DOUBLE(rcs2);
+    double mod;
+    double rmod;
+    double cost;
+    double sint;
+    double plegendre;
+    double tans[3], vector1[3];
+    double *elabc;
+    double elc;
+    double ele,ele2;
+    double ela,ela2;
+    double elz,elz2;
+    double c[3];
+    double rbxc[3];
+
+    if (pc->links->status[link_index] == LINK_UNUSED) return;
 
     elabc = pc->s.elabc;
     elc = sqrt(elabc[0]*elabc[0] - elabc[1]*elabc[1]);
     ele = elc/elabc[0];
     ela = colloid_principal_radius(&pc->s);
 
-    /* Diagnostic record of f0 before additions are made. */
-    /* Really, f0 should not be used for dual purposes... */
-
-    if (threadIdx.x == 0) {
-      pc->diagnostic.fbuild[X] = pc->f0[X];
-      pc->diagnostic.fbuild[Y] = pc->f0[Y];
-      pc->diagnostic.fbuild[Z] = pc->f0[Z];
-
-      for (i = 0; i < 21; i++) {
-        pc->zeta[i] = 0.0;
-      }
+    i = pc->links->i[link_index];              /* index site i (outside) */
+    j = pc->links->j[link_index];              /* index site j (inside) */
+    ij = pc->links->p[link_index];             /* link velocity index i->j */
+    ji = lb->model.nvel - ij;                  /* link velocity index j->i */
+    
+    double rb[3];
+    for (ia = 0; ia < 3; ia++) {
+      rb[ia] = pc->links->rb[ia][link_index];
     }
 
-    /* We need to normalise link quantities by the sum of weights
-     * over the particle. Note that sumw cannot be zero here during
-     * correct operation (implies the particle has no links). */
+    assert(ij > 0 && ij < lb->model.nvel);
 
-    if (threadIdx.x == 0) {
-      double rsumw = 1.0 / pc->sumw;
-      for (ia = 0; ia < 3; ia++) {
-        pc->cbar[ia]   *= rsumw;
-        pc->rxcbar[ia] *= rsumw;
-      }
-      pc->deltam   *= rsumw;
-      pc->s.deltaphi *= rsumw;
+    /* For stationary link, the momentum transfer from the
+     * fluid to the colloid is "dm" */
+
+    if (pc->links->status[link_index] == LINK_FLUID) {
+	    /* Bounce back of fluid on outside plus correction
+	     * arising from changes in shape at previous step.
+	     * Note minus sign. */
+
+	    double dm_a = 0.0;
+
+	    lb_f(lb, i, ij, 0, &fdist);
+	    dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+	    delta = 2.0*rcs2*lb->model.wv[ij]*rho0;
+
+
+	    /* Squirmer section */
+	    /* Some rationalisation may be in order here but prefer
+	    * a clear separation of different shapes at the moment ... */
+
+	    if (pc->s.active && pc->s.shape == COLLOID_SHAPE_DISK) {
+
+	      /* Both the link vector rb and the direction of motion s.m
+	       * must have z-component = 0 in 2d */
+	      /* If so, vector1 has only a component in z, and tans then
+	       * has only components in (x,y). */
+
+	      mod = modulus(rb)*modulus(pc->s.m);
+	      rmod = 0.0;
+	      if (mod != 0.0) rmod = 1.0/mod;
+	      cost = rmod*dot_product(rb, pc->s.m);
+	      if (cost*cost > 1.0) cost = 1.0;
+	      assert(cost*cost <= 1.0);
+	      sint = sqrt(1.0 - cost*cost);
+
+        double rb[3];
+        for (ia = 0; ia < 3; ia++) {
+          rb[ia] = pc->links->rb[ia][link_index];
+        }
+	      cross_product(rb, pc->s.m, vector1);
+	      cross_product(vector1, rb, tans);
+
+	      mod = modulus(tans);
+	      rmod = 0.0;
+	      if (mod != 0.0) rmod = 1.0/mod;
+	      plegendre = -sint*(pc->s.b2*cost + pc->s.b1);
+
+	      /* Compute correction to bbl for a sphere: */
+	      dm_a = 0.0;
+	      for (ia = 0; ia < 3; ia++) {
+	        dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
+	      }
+	    }
+
+	    if (pc->s.active && pc->s.shape == COLLOID_SHAPE_SPHERE) {
+
+	      /* We expect s.m to be a unit vector, but for floating
+	       * point purposes, we must make sure here. */
+
+	      mod = modulus(rb)*modulus(pc->s.m);
+	      rmod = 0.0;
+	      if (mod != 0.0) rmod = 1.0/mod;
+	      cost = rmod*dot_product(rb, pc->s.m);
+	      if (cost*cost > 1.0) cost = 1.0;
+	      assert(cost*cost <= 1.0);
+	      sint = sqrt(1.0 - cost*cost);
+
+	      cross_product(rb, pc->s.m, vector1);
+	      cross_product(vector1, rb, tans);
+
+	      mod = modulus(tans);
+	      rmod = 0.0;
+	      if (mod != 0.0) rmod = 1.0/mod;
+	      plegendre = -sint*(pc->s.b2*cost + pc->s.b1);
+
+	      /* Compute correction to bbl for a sphere: */
+	      dm_a = 0.0;
+	      for (ia = 0; ia < 3; ia++) {
+	        dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
+	      }
+	    }
+
+	    /* Ellipsoidal squirmer */
+
+	    if (pc->s.active && pc->s.shape == COLLOID_SHAPE_ELLIPSOID) {
+	      double elr, sdotez;
+	      double *elbz;
+	      double denom, term1, term2;
+	      double elrho[3], xi1, xi2, xi;
+	      double diff1, diff2, gridin[3], elzin;
+
+	      /* This is the tangent calculation, which might be replaced
+	       * by the surface_tanget function ... to be confirmed ... */
+	      elbz = pc->s.m;
+	      elz = dot_product(rb, elbz);
+	      for (ia = 0; ia < 3; ia++) {
+	        elrho[ia] = rb[ia] - elz*elbz[ia];
+	      }
+
+	      elr = modulus(elrho);
+	      rmod = 0.0;
+	      if (elr != 0.0) rmod = 1.0/elr;
+	      for (ia = 0; ia < 3; ia++) {
+	        elrho[ia] = elrho[ia]*rmod;
+	      }
+	      ela2 = ela*ela;
+	      elz2 = elz*elz;
+	      ele2 = ele*ele;
+	      diff1 = ela2-elz2;
+	      diff2 = ela2-ele2*elz2;
+
+	      /* Taking care of the unusual circumstances in which the grid
+	       * point lies outside the particle and elz > ela. Then the
+	       * tangent vector is calculated for the neighbouring grid
+	       * point inside*/
+
+	      if (diff1 < 0.0) {
+	        for (ia = 0; ia < 3; ia++) {
+	          gridin[ia] = rb[ia]+lb->model.cv[ij][ia];
+	          elzin = dot_product(gridin, elbz);
+	          elz2 = elzin*elzin;
+	          diff1 = ela2-elz2;
+	        }
+	        /* diff1 is a more stringent criterion */
+	        if (diff2 < 0.0) diff2 = ela2 - ele2*elz2;
+	      }
+	      denom = sqrt(diff2);
+	      term1 = -sqrt(diff1)/denom;
+	      term2 = sqrt(1.0-ele*ele)*elz/denom;
+	      for (ia = 0; ia < 3; ia++) {
+	        tans[ia] = term1*elbz[ia] + term2*elrho[ia];
+	      }
+	      sdotez = dot_product(tans, elbz);
+	      xi1 = sqrt(elr*elr+(elz+elc)*(elz+elc));
+	      xi2 = sqrt(elr*elr+(elz-elc)*(elz-elc));
+	      xi = (xi1 - xi2)/(2.0*elc);
+
+	      plegendre = -(pc->s.b1)*sdotez - (pc->s.b2)*xi*sdotez;
+
+	      mod = modulus(tans);
+	      rmod = 0.0;
+	      if (mod != 0.0) rmod = 1.0/mod;
+
+	      /* Compute contribution to bbl - dm_a - for an ellipsoid */
+	      dm_a = 0.0;
+	      for (ia = 0; ia < 3; ia++) {
+	        dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
+	      }
+	    }
+
+	    lb_f(lb, i, ij, 0, &fdist);
+	    fdist += dm_a;
+	    lb_f_set(lb, i, ij, 0, fdist);
+
+	    dm += dm_a;
+
+	    /* needed for mass conservation   */
+	    atomicAddDouble(&pc->sump, dm_a);
+    } else {
+	    /* Virtual momentum transfer for solid->solid links,
+	     * but no contribution to drag maxtrix */
+
+	    lb_f(lb, i, ij, 0, &fdist);
+	    dm = fdist;
+	    lb_f(lb, j, ji, 0, &fdist);
+	    dm += fdist;
+	    delta = 0.0;
     }
-    __syncthreads();
 
-    /* Sum over the links */
-
-    for (int link_index = threadIdx.x; link_index < pc->links->active_links; link_index += blockDim.x) {
-
-      if (pc->links->status[link_index] == LINK_UNUSED) continue;
-
-      i = pc->links->i[link_index];              /* index site i (outside) */
-      j = pc->links->j[link_index];              /* index site j (inside) */
-      ij = pc->links->p[link_index];             /* link velocity index i->j */
-      ji = lb->model.nvel - ij;                  /* link velocity index j->i */
-      
-      double rb[3];
-      for (ia = 0; ia < 3; ia++) {
-        rb[ia] = pc->links->rb[ia][link_index];
-      }
-
-      assert(ij > 0 && ij < lb->model.nvel);
-
-      /* For stationary link, the momentum transfer from the
-       * fluid to the colloid is "dm" */
-
-      if (pc->links->status[link_index] == LINK_FLUID) {
-	      /* Bounce back of fluid on outside plus correction
-	       * arising from changes in shape at previous step.
-	       * Note minus sign. */
-
-	      double dm_a = 0.0;
-
-	      lb_f(lb, i, ij, 0, &fdist);
-	      dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
-	      delta = 2.0*rcs2*lb->model.wv[ij]*rho0;
-
-
-	      /* Squirmer section */
-	      /* Some rationalisation may be in order here but prefer
-	      * a clear separation of different shapes at the moment ... */
-
-	      if (pc->s.active && pc->s.shape == COLLOID_SHAPE_DISK) {
-
-	        /* Both the link vector rb and the direction of motion s.m
-	         * must have z-component = 0 in 2d */
-	        /* If so, vector1 has only a component in z, and tans then
-	         * has only components in (x,y). */
-
-	        mod = modulus(rb)*modulus(pc->s.m);
-	        rmod = 0.0;
-	        if (mod != 0.0) rmod = 1.0/mod;
-	        cost = rmod*dot_product(rb, pc->s.m);
-	        if (cost*cost > 1.0) cost = 1.0;
-	        assert(cost*cost <= 1.0);
-	        sint = sqrt(1.0 - cost*cost);
-
-          double rb[3];
-          for (ia = 0; ia < 3; ia++) {
-            rb[ia] = pc->links->rb[ia][link_index];
-          }
-	        cross_product(rb, pc->s.m, vector1);
-	        cross_product(vector1, rb, tans);
-
-	        mod = modulus(tans);
-	        rmod = 0.0;
-	        if (mod != 0.0) rmod = 1.0/mod;
-	        plegendre = -sint*(pc->s.b2*cost + pc->s.b1);
-
-	        /* Compute correction to bbl for a sphere: */
-	        dm_a = 0.0;
-	        for (ia = 0; ia < 3; ia++) {
-	          dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
-	        }
-	      }
-
-	      if (pc->s.active && pc->s.shape == COLLOID_SHAPE_SPHERE) {
-
-	        /* We expect s.m to be a unit vector, but for floating
-	         * point purposes, we must make sure here. */
-
-	        mod = modulus(rb)*modulus(pc->s.m);
-	        rmod = 0.0;
-	        if (mod != 0.0) rmod = 1.0/mod;
-	        cost = rmod*dot_product(rb, pc->s.m);
-	        if (cost*cost > 1.0) cost = 1.0;
-	        assert(cost*cost <= 1.0);
-	        sint = sqrt(1.0 - cost*cost);
-
-	        cross_product(rb, pc->s.m, vector1);
-	        cross_product(vector1, rb, tans);
-
-	        mod = modulus(tans);
-	        rmod = 0.0;
-	        if (mod != 0.0) rmod = 1.0/mod;
-	        plegendre = -sint*(pc->s.b2*cost + pc->s.b1);
-
-	        /* Compute correction to bbl for a sphere: */
-	        dm_a = 0.0;
-	        for (ia = 0; ia < 3; ia++) {
-	          dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
-	        }
-	      }
-
-	      /* Ellipsoidal squirmer */
-
-	      if (pc->s.active && pc->s.shape == COLLOID_SHAPE_ELLIPSOID) {
-	        double elr, sdotez;
-	        double *elbz;
-	        double denom, term1, term2;
-	        double elrho[3], xi1, xi2, xi;
-	        double diff1, diff2, gridin[3], elzin;
-
-	        /* This is the tangent calculation, which might be replaced
-	         * by the surface_tanget function ... to be confirmed ... */
-	        elbz = pc->s.m;
-	        elz = dot_product(rb, elbz);
-	        for (ia = 0; ia < 3; ia++) {
-	          elrho[ia] = rb[ia] - elz*elbz[ia];
-	        }
-
-	        elr = modulus(elrho);
-	        rmod = 0.0;
-	        if (elr != 0.0) rmod = 1.0/elr;
-	        for (ia = 0; ia < 3; ia++) {
-	          elrho[ia] = elrho[ia]*rmod;
-	        }
-	        ela2 = ela*ela;
-	        elz2 = elz*elz;
-	        ele2 = ele*ele;
-	        diff1 = ela2-elz2;
-	        diff2 = ela2-ele2*elz2;
-
-	        /* Taking care of the unusual circumstances in which the grid
-	         * point lies outside the particle and elz > ela. Then the
-	         * tangent vector is calculated for the neighbouring grid
-	         * point inside*/
-
-	        if (diff1 < 0.0) {
-	          for (ia = 0; ia < 3; ia++) {
-	            gridin[ia] = rb[ia]+lb->model.cv[ij][ia];
-	            elzin = dot_product(gridin, elbz);
-	            elz2 = elzin*elzin;
-	            diff1 = ela2-elz2;
-	          }
-	          /* diff1 is a more stringent criterion */
-	          if (diff2 < 0.0) diff2 = ela2 - ele2*elz2;
-	        }
-	        denom = sqrt(diff2);
-	        term1 = -sqrt(diff1)/denom;
-	        term2 = sqrt(1.0-ele*ele)*elz/denom;
-	        for (ia = 0; ia < 3; ia++) {
-	          tans[ia] = term1*elbz[ia] + term2*elrho[ia];
-	        }
-	        sdotez = dot_product(tans, elbz);
-	        xi1 = sqrt(elr*elr+(elz+elc)*(elz+elc));
-	        xi2 = sqrt(elr*elr+(elz-elc)*(elz-elc));
-	        xi = (xi1 - xi2)/(2.0*elc);
-
-	        plegendre = -(pc->s.b1)*sdotez - (pc->s.b2)*xi*sdotez;
-
-	        mod = modulus(tans);
-	        rmod = 0.0;
-	        if (mod != 0.0) rmod = 1.0/mod;
-
-	        /* Compute contribution to bbl - dm_a - for an ellipsoid */
-	        dm_a = 0.0;
-	        for (ia = 0; ia < 3; ia++) {
-	          dm_a += -delta*plegendre*rmod*tans[ia]*lb->model.cv[ij][ia];
-	        }
-	      }
-
-	      lb_f(lb, i, ij, 0, &fdist);
-	      fdist += dm_a;
-	      lb_f_set(lb, i, ij, 0, fdist);
-
-	      dm += dm_a;
-
-	      /* needed for mass conservation   */
-	      atomicAdd(&pc->sump, dm_a);
-      } else {
-	      /* Virtual momentum transfer for solid->solid links,
-	       * but no contribution to drag maxtrix */
-
-	      lb_f(lb, i, ij, 0, &fdist);
-	      dm = fdist;
-	      lb_f(lb, j, ji, 0, &fdist);
-	      dm += fdist;
-	      delta = 0.0;
-      }
-
-      for (ia = 0; ia < 3; ia++) {
-	      c[ia] = 1.0*lb->model.cv[ij][ia];
-      }
-
-      cross_product(rb, c, rbxc);
-
-      /* Now add contribution to the sums required for
-       * self-consistent evaluation of new velocities. */
-
-      for (ia = 0; ia < 3; ia++) {
-	      atomicAdd(&pc->f0[ia], dm*c[ia]);
-	      atomicAdd(&pc->t0[ia], dm*rbxc[ia]);
-	      /* Corrections when links are missing (close to contact) */
-	      c[ia] -= pc->cbar[ia];
-	      rbxc[ia] -= pc->rxcbar[ia];
-      }
-
-      /* Drag matrix elements */
-
-      atomicAdd(&pc->zeta[ 0], delta*c[X]*c[X]);
-      atomicAdd(&pc->zeta[ 1], delta*c[X]*c[Y]);
-      atomicAdd(&pc->zeta[ 2], delta*c[X]*c[Z]);
-      atomicAdd(&pc->zeta[ 3], delta*c[X]*rbxc[X]);
-      atomicAdd(&pc->zeta[ 4], delta*c[X]*rbxc[Y]);
-      atomicAdd(&pc->zeta[ 5], delta*c[X]*rbxc[Z]);
-
-      atomicAdd(&pc->zeta[ 6], delta*c[Y]*c[Y]);
-      atomicAdd(&pc->zeta[ 7], delta*c[Y]*c[Z]);
-      atomicAdd(&pc->zeta[ 8], delta*c[Y]*rbxc[X]);
-      atomicAdd(&pc->zeta[ 9], delta*c[Y]*rbxc[Y]);
-      atomicAdd(&pc->zeta[10], delta*c[Y]*rbxc[Z]);
-
-      atomicAdd(&pc->zeta[11], delta*c[Z]*c[Z]);
-      atomicAdd(&pc->zeta[12], delta*c[Z]*rbxc[X]);
-      atomicAdd(&pc->zeta[13], delta*c[Z]*rbxc[Y]);
-      atomicAdd(&pc->zeta[14], delta*c[Z]*rbxc[Z]);
-
-      atomicAdd(&pc->zeta[15], delta*rbxc[X]*rbxc[X]);
-      atomicAdd(&pc->zeta[16], delta*rbxc[X]*rbxc[Y]);
-      atomicAdd(&pc->zeta[17], delta*rbxc[X]*rbxc[Z]);
-
-      atomicAdd(&pc->zeta[18], delta*rbxc[Y]*rbxc[Y]);
-      atomicAdd(&pc->zeta[19], delta*rbxc[Y]*rbxc[Z]);
-
-      atomicAdd(&pc->zeta[20], delta*rbxc[Z]*rbxc[Z]);
-
+    for (ia = 0; ia < 3; ia++) {
+	    c[ia] = 1.0*lb->model.cv[ij][ia];
     }
-  }
+
+    cross_product(rb, c, rbxc);
+
+    /* Now add contribution to the sums required for
+     * self-consistent evaluation of new velocities. */
+
+    for (ia = 0; ia < 3; ia++) {
+	    atomicAddDouble(&pc->f0[ia], dm*c[ia]);
+	    atomicAddDouble(&pc->t0[ia], dm*rbxc[ia]);
+	    /* Corrections when links are missing (close to contact) */
+	    c[ia] -= pc->cbar[ia];
+	    rbxc[ia] -= pc->rxcbar[ia];
+    }
+
+    /* Drag matrix elements */
+
+    atomicAddDouble(&pc->zeta[ 0], delta*c[X]*c[X]);
+    atomicAddDouble(&pc->zeta[ 1], delta*c[X]*c[Y]);
+    atomicAddDouble(&pc->zeta[ 2], delta*c[X]*c[Z]);
+    atomicAddDouble(&pc->zeta[ 3], delta*c[X]*rbxc[X]);
+    atomicAddDouble(&pc->zeta[ 4], delta*c[X]*rbxc[Y]);
+    atomicAddDouble(&pc->zeta[ 5], delta*c[X]*rbxc[Z]);
+
+    atomicAddDouble(&pc->zeta[ 6], delta*c[Y]*c[Y]);
+    atomicAddDouble(&pc->zeta[ 7], delta*c[Y]*c[Z]);
+    atomicAddDouble(&pc->zeta[ 8], delta*c[Y]*rbxc[X]);
+    atomicAddDouble(&pc->zeta[ 9], delta*c[Y]*rbxc[Y]);
+    atomicAddDouble(&pc->zeta[10], delta*c[Y]*rbxc[Z]);
+
+    atomicAddDouble(&pc->zeta[11], delta*c[Z]*c[Z]);
+    atomicAddDouble(&pc->zeta[12], delta*c[Z]*rbxc[X]);
+    atomicAddDouble(&pc->zeta[13], delta*c[Z]*rbxc[Y]);
+    atomicAddDouble(&pc->zeta[14], delta*c[Z]*rbxc[Z]);
+
+    atomicAddDouble(&pc->zeta[15], delta*rbxc[X]*rbxc[X]);
+    atomicAddDouble(&pc->zeta[16], delta*rbxc[X]*rbxc[Y]);
+    atomicAddDouble(&pc->zeta[17], delta*rbxc[X]*rbxc[Z]);
+
+    atomicAddDouble(&pc->zeta[18], delta*rbxc[Y]*rbxc[Y]);
+    atomicAddDouble(&pc->zeta[19], delta*rbxc[Y]*rbxc[Z]);
+
+    atomicAddDouble(&pc->zeta[20], delta*rbxc[Z]*rbxc[Z]);
 }
 
 /*****************************************************************************
@@ -1361,9 +1422,18 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   /* All colloids, including halo */
 
   // Actually launch the kernel
-  dim3 nblk = {cinfo->colloid_array->n_colloids, 1, 1};
-  dim3 ntpb = {128, 1, 1};
-  tdpLaunchKernel(bbl_pass2_kernel, nblk, ntpb, 0, 0, cinfo->target, lb->target, rho0);
+  dim3 n_blocks = {1, 1, 1};
+  dim3 n_threads = {1, 1, 1};
+  int n_devices;
+  tdpGetDeviceCount(&n_devices);
+  if (n_devices == 0) {
+    n_threads.x = (cinfo->target->colloid_array->n_colloids < omp_get_max_threads()) ?
+                  cinfo->target->colloid_array->n_colloids : omp_get_max_threads();
+  } else {
+    n_blocks.x = cinfo->target->colloid_array->n_colloids;
+    n_threads.x = 128;
+  }
+  tdpLaunchKernel(bbl_pass2_kernel, n_blocks, n_threads, 0, 0, cinfo->target, lb->target, rho0);
   tdpAssert(tdpPeekAtLastError());
   tdpAssert(tdpDeviceSynchronize());
 
@@ -1384,18 +1454,31 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
   double fdist;
   double wxrb[3];
   
-    int colloid_index = blockIdx.x;
+  int colloid_start_index;
+  int colloid_stride;
+  int n_devices;
+  tdpGetDeviceCount(&n_devices);
+  if (n_devices == 0) {
+    colloid_start_index = omp_get_thread_num();
+    colloid_stride = omp_get_num_threads();
+  } else {
+    colloid_start_index = blockIdx.x;
+    colloid_stride = gridDim.x;
+  }
+  for (int colloid_index = colloid_start_index; colloid_index < cinfo->colloid_array->n_colloids; colloid_index += colloid_stride) {
     pc = cinfo->colloid_array->colloids[colloid_index];
 
-    if (pc->s.bc != COLLOID_BC_BBL) return;
+    if (pc->s.bc != COLLOID_BC_BBL) continue;
 
     /* Set correction for phi arising from previous step */
 
     dgtm1 = pc->s.deltaphi;
-    if (threadIdx.x == 0) {
+    if ((threadIdx.x == 0 && n_devices > 0) || n_devices == 0) {
       pc->s.deltaphi = 0.0;
     }
-    __syncthreads();
+    if (n_devices > 0) {
+      __syncthreads(); // We only need to sync threads if we're running on GPUs. In openmp threads process different colloids and links are processed sequentially.
+    }
 
     /* Correction to the bounce-back for this particle if it is
      * without full complement of links */
@@ -1410,80 +1493,26 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
     dms = 2.0*rcs2*rho0*dms;
 
     /* Run through the links */
-
-    for (int link_index = threadIdx.x; link_index < pc->links->active_links; link_index += blockDim.x) {
-
-      i = pc->links->i[link_index];              /* index site i (outside) */
-      j = pc->links->j[link_index];              /* index site j (inside) */
-      ij = pc->links->p[link_index];             /* link velocity index i->j */
-      ji = lb->model.nvel - ij;                  /* link velocity index j->i */
-
-      if (pc->links->status[link_index] == LINK_FLUID) {
-
-        lb_f(lb, i, ij, 0, &fdist);
-        dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
-        
-        /* Compute the self-consistent boundary velocity,
-         * and add the correction term for changes in shape. */
-        
-        double rb[3];
-        for (int i = 0; i < 3; i++) {
-          rb[i] = pc->links->rb[i][link_index];
-        }
-        cross_product(pc->s.w, rb, wxrb);
-        
-        vdotc = 0.0;
-        for (ia = 0; ia < 3; ia++) {
-          vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
-        }
-        vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
-        df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
-        
-        /* Contribution to mass conservation from squirmer */
-        
-        df += lb->model.wv[ij]*pc->sump;
-        
-        /* Correction owing to missing links "squeeze term" */
-        
-        df -= lb->model.wv[ij]*dms;
-        
-        /* The outside site actually undergoes BBL. */
-        
-        lb_f(lb, i, ij, LB_RHO, &fdist);
-        fdist = fdist - df;
-        lb_f_set(lb, j, ji, LB_RHO, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
-
-        /* This is slightly clunky. If the order parameter is
-         * via LB, bounce back with correction. */
-        
-        if (lb->ndist > 1) {
-          lb_0th_moment(lb, i, LB_PHI, &dg);
-          dg *= vdotc;
-          pc->s.deltaphi += dg; // XXX: This could be a race condition.
-          dg -= lb->model.wv[ij]*dgtm1;
-        
-          lb_f(lb, i, ij, LB_PHI, &fdist);
-          fdist = fdist - dg;
-          lb_f_set(lb, j, ji, LB_PHI, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
-        }
-        
-     } else if (pc->links->status[link_index] == LINK_COLLOID) {
-
-       /* The stress should include the solid->solid term */
-       
-       lb_f(lb, i, ij, 0, &fdist);
-       dm = fdist;
-       lb_f(lb, j, ji, 0, &fdist);
-       dm += fdist;
-       
-     }
-     /* Next link */
-   }
+    int start_index;
+    int stride;
+    if (n_devices == 0) {
+      start_index = 0;
+      stride = 1;
+    } else {
+      start_index = threadIdx.x;
+      stride = blockDim.x;
+    }
+    for (int link_index = start_index; link_index < pc->links->active_links; link_index += stride) {
+      bbl_pass2_process_links(pc, lb, rho0, dms, dgtm1, link_index);
+    }
 
    /* Reset factors required for change of shape, etc */
 
-   __syncthreads();
-   if (threadIdx.x == 0) {
+   if (n_devices > 0) {
+     // We only need to sync threads if we're running on GPUs. In openmp threads process different colloids and links are processed sequentially.
+     __syncthreads();
+   }
+   if ((threadIdx.x == 0 && n_devices > 0) || n_devices == 0) {
      pc->deltam = 0.0;
      pc->sump = 0.0;
 
@@ -1494,6 +1523,85 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
        pc->tc0[ia] = 0.0;
      }
    }
+  }
+}
+
+__host__ __device__ void bbl_pass2_process_links(colloid_t * pc, lb_t * lb, double rho0, double dms, double dgtm1, int link_index) {
+  int ia;
+  int i, j, ij, ji;
+  double fdist;
+  double dm;
+  double wxrb[3];
+  double vdotc;
+  double df;
+  double dg;
+  LB_RCS2_DOUBLE(rcs2);
+
+  i = pc->links->i[link_index];              /* index site i (outside) */
+  j = pc->links->j[link_index];              /* index site j (inside) */
+  ij = pc->links->p[link_index];             /* link velocity index i->j */
+  ji = lb->model.nvel - ij;                  /* link velocity index j->i */
+
+  if (pc->links->status[link_index] == LINK_FLUID) {
+
+    lb_f(lb, i, ij, 0, &fdist);
+    dm =  2.0*fdist - lb->model.wv[ij]*pc->deltam;
+    
+    /* Compute the self-consistent boundary velocity,
+     * and add the correction term for changes in shape. */
+    
+    double rb[3];
+    for (int i = 0; i < 3; i++) {
+      rb[i] = pc->links->rb[i][link_index];
+    }
+    cross_product(pc->s.w, rb, wxrb);
+    
+    vdotc = 0.0;
+    for (ia = 0; ia < 3; ia++) {
+      vdotc += (pc->s.v[ia] + wxrb[ia])*lb->model.cv[ij][ia];
+    }
+    vdotc = 2.0*rcs2*lb->model.wv[ij]*vdotc;
+    df = rho0*vdotc + lb->model.wv[ij]*pc->deltam;
+    
+    /* Contribution to mass conservation from squirmer */
+    
+    df += lb->model.wv[ij]*pc->sump;
+    
+    /* Correction owing to missing links "squeeze term" */
+    
+    df -= lb->model.wv[ij]*dms;
+    
+    /* The outside site actually undergoes BBL. */
+    
+    lb_f(lb, i, ij, LB_RHO, &fdist);
+    fdist = fdist - df;
+    lb_f_set(lb, j, ji, LB_RHO, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
+
+    /* This is slightly clunky. If the order parameter is
+     * via LB, bounce back with correction. */
+    
+    if (lb->ndist > 1) {
+      lb_0th_moment(lb, i, LB_PHI, &dg);
+      dg *= vdotc;
+      pc->s.deltaphi += dg; // XXX: This could be a race condition.
+      dg -= lb->model.wv[ij]*dgtm1;
+    
+      lb_f(lb, i, ij, LB_PHI, &fdist);
+      fdist = fdist - dg;
+      lb_f_set(lb, j, ji, LB_PHI, fdist); // XXX: This looks like it ends up being a reduction over threads. Needs to be reduced into fdist then set at the end of the kernel.
+    }
+    
+  } else if (pc->links->status[link_index] == LINK_COLLOID) {
+
+    /* The stress should include the solid->solid term */
+    
+    lb_f(lb, i, ij, 0, &fdist);
+    dm = fdist;
+    lb_f(lb, j, ji, 0, &fdist);
+    dm += fdist;
+    
+  }
+  /* Next link */
 }
 
 /*****************************************************************************
