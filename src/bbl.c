@@ -35,6 +35,8 @@
 #include "colloids.h"
 #include "timer.h"
 
+#include "omp.h"
+
 /* Ellipsoid update mechanism flag */
 /* There's no particular reason not to use the quaternion method, but
  * the alternative has been retained in case comparison is wanted. */
@@ -90,6 +92,33 @@ void bbl_ellipsoid_unsteady_mI(const double q[4], const double mi[3],
 int bbl_wall_lubr_correction_ellipsoid(bbl_t * bbl, wall_t * wall,
 				       colloid_t * pc, double wdrag[3]);
 
+__host__ __device__ static inline void bbl_add_double(double *x, double v) {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+  tdpAtomicAddDouble(x, v);   /* device compilation */
+#else
+  *x += v;                    /* host compilation */
+#endif
+}
+
+__host__ __device__ static inline int bbl_get_thread_num() {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+  return threadIdx.x;   /* device compilation */
+#elif defined(_OPENMP)
+  return omp_get_thread_num();                  /* host compilation */
+#else 
+  return 1;                                     /* host compilation */
+#endif
+}
+
+__host__ __device__ static inline int bbl_get_num_threads() {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+  return blockDim.x;                   /* device compilation */
+#elif defined(_OPENMP)
+  return omp_get_max_threads();                  /* host compilation */
+#else 
+  return 1;                                     /* host compilation */
+#endif
+}
 /*****************************************************************************
  *
  *  bbl_create
@@ -807,8 +836,8 @@ static int bbl_pass1(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   int n_devices;
   tdpGetDeviceCount(&n_devices);
   if (n_devices == 0) {
-    n_threads.x = (cinfo->target->colloid_array->n_colloids < omp_get_max_threads()) ?
-                  cinfo->target->colloid_array->n_colloids : omp_get_max_threads();
+    n_threads.x = (cinfo->target->colloid_array->n_colloids < bbl_get_num_threads()) ?
+                  cinfo->target->colloid_array->n_colloids : bbl_get_num_threads();
   } else {
     n_blocks.x = cinfo->target->colloid_array->n_colloids;
     n_threads.x = 128;
@@ -848,8 +877,8 @@ __global__ void bbl_pass1_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
   int thread;
   tdpGetDeviceCount(&n_devices);
   if (n_devices == 0) {
-    colloid_start_index = omp_get_thread_num();
-    colloid_stride = omp_get_num_threads();
+    colloid_start_index = bbl_get_thread_num();
+    colloid_stride = bbl_get_num_threads();
   } else {
     colloid_start_index = blockIdx.x;
     colloid_stride = gridDim.x;
@@ -1108,7 +1137,7 @@ __host__ __device__ void bbl_pass1_process_links(colloid_t * pc, lb_t * lb, doub
 	    dm += dm_a;
 
 	    /* needed for mass conservation   */
-	    atomicAddDouble(&pc->sump, dm_a);
+	    bbl_add_double(&pc->sump, dm_a);
     } else {
 	    /* Virtual momentum transfer for solid->solid links,
 	     * but no contribution to drag maxtrix */
@@ -1130,8 +1159,8 @@ __host__ __device__ void bbl_pass1_process_links(colloid_t * pc, lb_t * lb, doub
      * self-consistent evaluation of new velocities. */
 
     for (ia = 0; ia < 3; ia++) {
-	    atomicAddDouble(&pc->f0[ia], dm*c[ia]);
-	    atomicAddDouble(&pc->t0[ia], dm*rbxc[ia]);
+	    bbl_add_double(&pc->f0[ia], dm*c[ia]);
+	    bbl_add_double(&pc->t0[ia], dm*rbxc[ia]);
 	    /* Corrections when links are missing (close to contact) */
 	    c[ia] -= pc->cbar[ia];
 	    rbxc[ia] -= pc->rxcbar[ia];
@@ -1139,32 +1168,32 @@ __host__ __device__ void bbl_pass1_process_links(colloid_t * pc, lb_t * lb, doub
 
     /* Drag matrix elements */
 
-    atomicAddDouble(&pc->zeta[ 0], delta*c[X]*c[X]);
-    atomicAddDouble(&pc->zeta[ 1], delta*c[X]*c[Y]);
-    atomicAddDouble(&pc->zeta[ 2], delta*c[X]*c[Z]);
-    atomicAddDouble(&pc->zeta[ 3], delta*c[X]*rbxc[X]);
-    atomicAddDouble(&pc->zeta[ 4], delta*c[X]*rbxc[Y]);
-    atomicAddDouble(&pc->zeta[ 5], delta*c[X]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[ 0], delta*c[X]*c[X]);
+    bbl_add_double(&pc->zeta[ 1], delta*c[X]*c[Y]);
+    bbl_add_double(&pc->zeta[ 2], delta*c[X]*c[Z]);
+    bbl_add_double(&pc->zeta[ 3], delta*c[X]*rbxc[X]);
+    bbl_add_double(&pc->zeta[ 4], delta*c[X]*rbxc[Y]);
+    bbl_add_double(&pc->zeta[ 5], delta*c[X]*rbxc[Z]);
 
-    atomicAddDouble(&pc->zeta[ 6], delta*c[Y]*c[Y]);
-    atomicAddDouble(&pc->zeta[ 7], delta*c[Y]*c[Z]);
-    atomicAddDouble(&pc->zeta[ 8], delta*c[Y]*rbxc[X]);
-    atomicAddDouble(&pc->zeta[ 9], delta*c[Y]*rbxc[Y]);
-    atomicAddDouble(&pc->zeta[10], delta*c[Y]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[ 6], delta*c[Y]*c[Y]);
+    bbl_add_double(&pc->zeta[ 7], delta*c[Y]*c[Z]);
+    bbl_add_double(&pc->zeta[ 8], delta*c[Y]*rbxc[X]);
+    bbl_add_double(&pc->zeta[ 9], delta*c[Y]*rbxc[Y]);
+    bbl_add_double(&pc->zeta[10], delta*c[Y]*rbxc[Z]);
 
-    atomicAddDouble(&pc->zeta[11], delta*c[Z]*c[Z]);
-    atomicAddDouble(&pc->zeta[12], delta*c[Z]*rbxc[X]);
-    atomicAddDouble(&pc->zeta[13], delta*c[Z]*rbxc[Y]);
-    atomicAddDouble(&pc->zeta[14], delta*c[Z]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[11], delta*c[Z]*c[Z]);
+    bbl_add_double(&pc->zeta[12], delta*c[Z]*rbxc[X]);
+    bbl_add_double(&pc->zeta[13], delta*c[Z]*rbxc[Y]);
+    bbl_add_double(&pc->zeta[14], delta*c[Z]*rbxc[Z]);
 
-    atomicAddDouble(&pc->zeta[15], delta*rbxc[X]*rbxc[X]);
-    atomicAddDouble(&pc->zeta[16], delta*rbxc[X]*rbxc[Y]);
-    atomicAddDouble(&pc->zeta[17], delta*rbxc[X]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[15], delta*rbxc[X]*rbxc[X]);
+    bbl_add_double(&pc->zeta[16], delta*rbxc[X]*rbxc[Y]);
+    bbl_add_double(&pc->zeta[17], delta*rbxc[X]*rbxc[Z]);
 
-    atomicAddDouble(&pc->zeta[18], delta*rbxc[Y]*rbxc[Y]);
-    atomicAddDouble(&pc->zeta[19], delta*rbxc[Y]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[18], delta*rbxc[Y]*rbxc[Y]);
+    bbl_add_double(&pc->zeta[19], delta*rbxc[Y]*rbxc[Z]);
 
-    atomicAddDouble(&pc->zeta[20], delta*rbxc[Z]*rbxc[Z]);
+    bbl_add_double(&pc->zeta[20], delta*rbxc[Z]*rbxc[Z]);
 }
 
 /*****************************************************************************
@@ -1427,8 +1456,8 @@ static int bbl_pass2(bbl_t * bbl, lb_t * lb, colloids_info_t * cinfo) {
   int n_devices;
   tdpGetDeviceCount(&n_devices);
   if (n_devices == 0) {
-    n_threads.x = (cinfo->target->colloid_array->n_colloids < omp_get_max_threads()) ?
-                  cinfo->target->colloid_array->n_colloids : omp_get_max_threads();
+    n_threads.x = (cinfo->target->colloid_array->n_colloids < bbl_get_num_threads()) ?
+                  cinfo->target->colloid_array->n_colloids : bbl_get_num_threads();
   } else {
     n_blocks.x = cinfo->target->colloid_array->n_colloids;
     n_threads.x = 128;
@@ -1459,8 +1488,8 @@ __global__ void bbl_pass2_kernel(colloids_info_t * cinfo, lb_t * lb, double rho0
   int n_devices;
   tdpGetDeviceCount(&n_devices);
   if (n_devices == 0) {
-    colloid_start_index = omp_get_thread_num();
-    colloid_stride = omp_get_num_threads();
+    colloid_start_index = bbl_get_thread_num();
+    colloid_stride = bbl_get_num_threads();
   } else {
     colloid_start_index = blockIdx.x;
     colloid_stride = gridDim.x;
